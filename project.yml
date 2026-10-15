@@ -1,0 +1,164 @@
+name: Overtime
+options:
+  deploymentTarget:
+    macOS: "14.0"
+packages:
+  OvertimeRuntime:
+    path: Packages/OvertimeRuntime
+  OvertimeCore:
+    path: Packages/OvertimeCore
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.10.0
+settings:
+  base:
+    ARCHS: arm64
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    SWIFT_VERSION: "6.0"
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    DEVELOPMENT_TEAM: ""
+    ENABLE_HARDENED_RUNTIME: YES
+    OTHER_CODE_SIGN_FLAGS: "--options=runtime"
+targets:
+  Overtime:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/Overtime
+      - path: Resources/LaunchDaemons
+        buildPhase:
+          copyFiles:
+            destination: wrapper
+            subpath: Contents/Library/LaunchDaemons
+      - path: Resources/Assets.xcassets
+      - path: NOTICE
+        buildPhase: resources
+      - path: LICENSE
+        buildPhase: resources
+      - path: scripts/uninstall.sh
+        buildPhase: resources
+    dependencies:
+      - package: OvertimeRuntime
+        product: OvertimeAppSupport
+      - package: OvertimeRuntime
+        product: OvertimeEngine
+      - package: OvertimeRuntime
+        product: OvertimeSystem
+      - package: OvertimeRuntime
+        product: OvertimeClamshell
+      - package: OvertimeRuntime
+        product: OvertimeHelperCore
+      - package: OvertimeRuntime
+        product: OvertimeHelperClient
+      - package: OvertimeCore
+        product: OvertimeCore
+      - package: Sparkle
+      - target: overtime-sentinel
+        copy:
+          destination: executables
+      - target: OvertimeHelper
+        copy:
+          destination: executables
+    info:
+      path: Resources/Info.plist
+      properties:
+        CFBundleDevelopmentRegion: en
+        LSUIElement: true
+        LSMinimumSystemVersion: "14.0"
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSLocationUsageDescription: "Overtime uses Location only to find and join your iPhone hotspot when the network stops working with the lid closed. It never stores or sends your location."
+        NSLocationWhenInUseUsageDescription: "Overtime uses Location only to find and join your iPhone hotspot when the network stops working with the lid closed. It never stores or sends your location."
+        SUFeedURL: https://github.com/ivanhernandez-dev/overtime/releases/latest/download/appcast.xml
+        SUPublicEDKey: $(SPARKLE_PUBLIC_ED_KEY)
+        SUEnableAutomaticChecks: true
+        SUScheduledCheckInterval: 86400
+        SUAutomaticallyUpdate: false
+        SUEnableSystemProfiling: false
+        SUVerifyUpdateBeforeExtraction: true
+        SURequireSignedFeed: true
+    entitlements:
+      path: Resources/Overtime-T1.entitlements
+      properties:
+        com.apple.security.cs.disable-library-validation: true
+        com.apple.security.personal-information.location: true
+    settings:
+      base:
+        PRODUCT_NAME: Overtime
+        MARKETING_VERSION: 1.0.0
+        CURRENT_PROJECT_VERSION: 10000
+        SPARKLE_PUBLIC_ED_KEY: UD7lL+zTuAv5psJB4a94BH94A95GEAlL3iGS26YFV3Q=
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: io.github.ivanhernandez-dev.overtime.dev
+          EXCLUDED_SOURCE_FILE_NAMES: io.github.ivanhernandez-dev.overtime.helper.plist
+        Release:
+          PRODUCT_BUNDLE_IDENTIFIER: io.github.ivanhernandez-dev.overtime
+          EXCLUDED_SOURCE_FILE_NAMES: io.github.ivanhernandez-dev.overtime.dev.helper.plist
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+  overtime-sentinel:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Packages/OvertimeRuntime/Sources/overtime-sentinel
+    dependencies:
+      - package: OvertimeRuntime
+        product: OvertimeClamshell
+    settings:
+      base:
+        PRODUCT_NAME: overtime-sentinel
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.ivanhernandez-dev.overtime.sentinel
+        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+      configs:
+        Release:
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+          ENTITLEMENTS_REQUIRED: NO
+  OvertimeHelper:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Packages/OvertimeRuntime/Sources/overtime-helper
+    dependencies:
+      - package: OvertimeRuntime
+        product: OvertimeHelperCore
+    settings:
+      base:
+        PRODUCT_NAME: OvertimeHelper
+        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+        ENTITLEMENTS_REQUIRED: NO
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: io.github.ivanhernandez-dev.overtime.dev.helper
+        Release:
+          PRODUCT_BUNDLE_IDENTIFIER: io.github.ivanhernandez-dev.overtime.helper
+  OvertimeTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources: [Tests/OvertimeTests]
+    dependencies:
+      - target: Overtime
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.ivanhernandez-dev.overtime.tests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+schemes:
+  Overtime:
+    build:
+      targets:
+        Overtime: all
+    test:
+      targets:
+        - OvertimeTests

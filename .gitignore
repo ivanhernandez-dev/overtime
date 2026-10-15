@@ -1,0 +1,5 @@
+.planning/
+.claude/CLAUDE.md
+.build/
+.swiftpm/
+Overtime.xcodeproj/

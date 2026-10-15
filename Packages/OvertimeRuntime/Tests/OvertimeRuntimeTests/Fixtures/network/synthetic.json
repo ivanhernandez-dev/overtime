@@ -1,0 +1,161 @@
+{
+  "bridgeOnly" : {
+    "interfaces" : [
+      { "bsdName" : "en0", "type" : "IEEE80211" },
+      { "bsdName" : "bridge0", "type" : "Bridge" }
+    ],
+    "store" : {
+      "State:/Network/Interface" : { "Interfaces" : [ "lo0", "en0", "bridge0" ] },
+      "State:/Network/Interface/bridge0/IPv4" : { "Addresses" : [ "10.0.0.20" ], "SubnetMasks" : [ "255.255.255.0" ] },
+      "State:/Network/Interface/en0/AirPort" : { "Power Status" : true },
+      "State:/Network/Interface/en0/IPv4" : { "Addresses" : [ "10.0.0.3" ], "SubnetMasks" : [ "255.255.255.0" ] },
+      "State:/Network/Service/service-1/IPv4" : {
+        "Addresses" : [ "10.0.0.20" ], "InterfaceName" : "bridge0", "Router" : "10.0.0.1", "SubnetMasks" : [ "255.255.255.0" ]
+      },
+      "State:/Network/Service/service-2/IPv4" : {
+        "Addresses" : [ "10.0.0.3" ], "InterfaceName" : "en0", "Router" : "10.0.0.1", "SubnetMasks" : [ "255.255.255.0" ]
+      }
+    }
+  },
+  "bridgeTypedHardwareName" : {
+    "interfaces" : [
+      { "bsdName" : "en0", "type" : "IEEE80211" },
+      { "bsdName" : "en9", "type" : "Bridge" }
+    ],
+    "store" : {
+      "State:/Network/Interface" : { "Interfaces" : [ "lo0", "en0", "en9" ] },
+      "State:/Network/Interface/en0/AirPort" : { "Power Status" : true },
+      "State:/Network/Interface/en9/IPv4" : { "Addresses" : [ "10.0.0.40" ], "SubnetMasks" : [ "255.255.255.0" ] },
+      "State:/Network/Service/service-1/IPv4" : {
+        "Addresses" : [ "10.0.0.40" ], "InterfaceName" : "en9", "Router" : "10.0.0.1", "SubnetMasks" : [ "255.255.255.0" ]
+      }
+    }
+  },
+  "emptyStore" : {
+    "interfaces" : [
+      { "bsdName" : "en0", "type" : "IEEE80211" },
+      { "bsdName" : "en10", "type" : "Ethernet" }
+    ],
+    "store" : {}
+  },
+  "ethernetTypedVirtualName" : {
+    "interfaces" : [
+      { "bsdName" : "en0", "type" : "IEEE80211" },
+      { "bsdName" : "ap1", "type" : "Ethernet" }
+    ],
+    "store" : {
+      "State:/Network/Interface" : { "Interfaces" : [ "lo0", "en0", "ap1" ] },
+      "State:/Network/Interface/ap1/IPv4" : { "Addresses" : [ "10.0.0.30" ], "SubnetMasks" : [ "255.255.255.0" ] },
+      "State:/Network/Interface/en0/AirPort" : { "Power Status" : true },
+      "State:/Network/Service/service-1/IPv4" : {
+        "Addresses" : [ "10.0.0.30" ], "InterfaceName" : "ap1", "Router" : "10.0.0.1", "SubnetMasks" : [ "255.255.255.0" ]
+      }
+    }
+  },
+  "hostOutOfRange" : {
+    "interfaces" : [ { "bsdName" : "en0", "type" : "IEEE80211" } ],
+    "store" : {
+      "State:/Network/Interface" : { "Interfaces" : [ "lo0", "en0" ] },
+      "State:/Network/Interface/en0/AirPort" : { "Power Status" : true },
+      "State:/Network/Interface/en0/IPv4" : { "Addresses" : [ "172.20.10.1" ], "SubnetMasks" : [ "255.255.255.240" ] },
+      "State:/Network/Service/service-1/IPv4" : {
+        "Addresses" : [ "172.20.10.1" ], "InterfaceName" : "en0", "Router" : "172.20.10.1", "SubnetMasks" : [ "255.255.255.240" ]
+      }
+    }
+  },
+  "hotspotOnly" : {
+    "interfaces" : [ { "bsdName" : "en0", "type" : "IEEE80211" } ],
+    "store" : {
+      "State:/Network/Interface" : { "Interfaces" : [ "lo0", "en0", "awdl0" ] },
+      "State:/Network/Interface/en0/AirPort" : { "Power Status" : true },
+      "State:/Network/Interface/en0/IPv4" : { "Addresses" : [ "172.20.10.3" ], "SubnetMasks" : [ "255.255.255.240" ] },
+      "State:/Network/Service/service-1/IPv4" : {
+        "Addresses" : [ "172.20.10.3" ], "InterfaceName" : "en0", "Router" : "172.20.10.1", "SubnetMasks" : [ "255.255.255.240" ]
+      }
+    }
+  },
+  "hotspotWithVPN" : {
+    "interfaces" : [ { "bsdName" : "en0", "type" : "IEEE80211" } ],
+    "store" : {
+      "State:/Network/Interface" : { "Interfaces" : [ "lo0", "en0", "awdl0", "utun4" ] },
+      "State:/Network/Interface/en0/AirPort" : { "Power Status" : true },
+      "State:/Network/Interface/en0/IPv4" : { "Addresses" : [ "172.20.10.3" ], "SubnetMasks" : [ "255.255.255.240" ] },
+      "State:/Network/Interface/utun4/IPv4" : { "Addresses" : [ "10.0.0.9" ] },
+      "State:/Network/Service/service-1/IPv4" : { "Addresses" : [ "10.0.0.9" ], "InterfaceName" : "utun4", "Router" : "10.0.0.9" },
+      "State:/Network/Service/service-2/IPv4" : {
+        "Addresses" : [ "172.20.10.3" ], "InterfaceName" : "en0", "Router" : "172.20.10.1", "SubnetMasks" : [ "255.255.255.240" ]
+      }
+    }
+  },
+  "linkLocal" : {
+    "interfaces" : [
+      { "bsdName" : "en0", "type" : "IEEE80211" },
+      { "bsdName" : "en7", "type" : "Ethernet" }
+    ],
+    "store" : {
+      "State:/Network/Interface" : { "Interfaces" : [ "lo0", "en0", "en7" ] },
+      "State:/Network/Interface/en0/AirPort" : { "Power Status" : true },
+      "State:/Network/Interface/en0/IPv4" : { "Addresses" : [ "10.0.0.3" ], "SubnetMasks" : [ "255.255.255.0" ] },
+      "State:/Network/Interface/en7/IPv4" : { "Addresses" : [ "169.254.10.20" ], "SubnetMasks" : [ "255.255.0.0" ] },
+      "State:/Network/Service/service-1/IPv4" : {
+        "Addresses" : [ "10.0.0.3" ], "InterfaceName" : "en0", "Router" : "10.0.0.1", "SubnetMasks" : [ "255.255.255.0" ]
+      },
+      "State:/Network/Service/service-2/IPv4" : {
+        "Addresses" : [ "169.254.10.20" ], "InterfaceName" : "en7", "SubnetMasks" : [ "255.255.0.0" ]
+      }
+    }
+  },
+  "noWifi" : {
+    "interfaces" : [ { "bsdName" : "en5", "type" : "Ethernet" } ],
+    "store" : {
+      "State:/Network/Interface" : { "Interfaces" : [ "lo0", "en5" ] }
+    }
+  },
+  "routerMismatch" : {
+    "interfaces" : [ { "bsdName" : "en0", "type" : "IEEE80211" } ],
+    "store" : {
+      "State:/Network/Interface" : { "Interfaces" : [ "lo0", "en0" ] },
+      "State:/Network/Interface/en0/AirPort" : { "Power Status" : true },
+      "State:/Network/Interface/en0/IPv4" : { "Addresses" : [ "172.20.10.3" ], "SubnetMasks" : [ "255.255.255.240" ] },
+      "State:/Network/Service/service-1/IPv4" : {
+        "Addresses" : [ "172.20.10.3" ], "InterfaceName" : "en0", "Router" : "172.20.10.9", "SubnetMasks" : [ "255.255.255.240" ]
+      }
+    }
+  },
+  "usbTethering" : {
+    "interfaces" : [
+      { "bsdName" : "en0", "type" : "IEEE80211" },
+      { "bsdName" : "en11", "type" : "Ethernet" }
+    ],
+    "store" : {
+      "State:/Network/Interface" : { "Interfaces" : [ "lo0", "en0", "en11" ] },
+      "State:/Network/Interface/en0/AirPort" : { "Power Status" : true },
+      "State:/Network/Interface/en0/IPv4" : { "Addresses" : [ "10.0.0.3" ], "SubnetMasks" : [ "255.255.255.0" ] },
+      "State:/Network/Interface/en11/IPv4" : { "Addresses" : [ "172.20.10.2" ], "SubnetMasks" : [ "255.255.255.240" ] },
+      "State:/Network/Service/service-1/IPv4" : {
+        "Addresses" : [ "172.20.10.2" ], "InterfaceName" : "en11", "Router" : "172.20.10.1", "SubnetMasks" : [ "255.255.255.240" ]
+      },
+      "State:/Network/Service/service-2/IPv4" : {
+        "Addresses" : [ "10.0.0.3" ], "InterfaceName" : "en0", "Router" : "10.0.0.1", "SubnetMasks" : [ "255.255.255.0" ]
+      }
+    }
+  },
+  "wifiOff" : {
+    "interfaces" : [ { "bsdName" : "en0", "type" : "IEEE80211" } ],
+    "store" : {
+      "State:/Network/Interface" : { "Interfaces" : [ "lo0", "en0" ] },
+      "State:/Network/Interface/en0/AirPort" : { "Power Status" : false }
+    }
+  },
+  "wrongMask" : {
+    "interfaces" : [ { "bsdName" : "en0", "type" : "IEEE80211" } ],
+    "store" : {
+      "State:/Network/Interface" : { "Interfaces" : [ "lo0", "en0" ] },
+      "State:/Network/Interface/en0/AirPort" : { "Power Status" : true },
+      "State:/Network/Interface/en0/IPv4" : { "Addresses" : [ "172.20.10.3" ], "SubnetMasks" : [ "255.255.255.0" ] },
+      "State:/Network/Service/service-1/IPv4" : {
+        "Addresses" : [ "172.20.10.3" ], "InterfaceName" : "en0", "Router" : "172.20.10.1", "SubnetMasks" : [ "255.255.255.0" ]
+      }
+    }
+  }
+}

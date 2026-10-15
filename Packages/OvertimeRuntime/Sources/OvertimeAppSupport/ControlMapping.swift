@@ -1,0 +1,209 @@
+import Foundation
+import OvertimeCore
+import OvertimeEngine
+import OvertimeSystem
+
+public enum PauseChoice: Sendable, Equatable, CaseIterable {
+  case fifteenMinutes
+  case oneHour
+  case untilTomorrow
+  case untilResumed
+
+  public var label: String {
+    switch self {
+    case .fifteenMinutes: "15 Minutes"
+    case .oneHour: "1 Hour"
+    case .untilTomorrow: "Until Tomorrow"
+    case .untilResumed: "Until Resumed"
+    }
+  }
+}
+
+public enum KeepAwakeChoice: Sendable, Equatable, CaseIterable {
+  case thirtyMinutes
+  case twoHours
+  case untilStopped
+
+  public var label: String {
+    switch self {
+    case .thirtyMinutes: "30 Minutes"
+    case .twoHours: "2 Hours"
+    case .untilStopped: "Until Stopped"
+    }
+  }
+}
+
+public enum ControlAction: Sendable, Equatable {
+  case pause(PauseChoice)
+  case keepAwake(KeepAwakeChoice)
+  case releaseUntilIdle
+  case resume
+  case stopKeepingAwake
+}
+
+public enum ControlMapping {
+  public static let pauseLabel = "Pause"
+  public static let keepAwakeLabel = "Keep Awake"
+  public static let resumeLabel = "Resume"
+  public static let stopKeepingAwakeLabel = "Stop Keeping Awake"
+  public static let releaseUntilIdleLabel = "Release Until Idle"
+  public static let restoreLabel = "Restore Normal Sleep Now"
+  public static let releaseUnavailableHelp = "Available while Claude is keeping the Mac awake."
+  public static let engineUnavailableHelp = "Unavailable while Overtime isn't running normally."
+  public static let uninstallingHelp = "Not available while Overtime uninstalls."
+
+  public static func request(for action: ControlAction, now: Date, calendar: Calendar) -> CtlRequest {
+    switch action {
+    case .pause(.fifteenMinutes): .pause(.forSeconds(900))
+    case .pause(.oneHour): .pause(.forSeconds(3600))
+    case .pause(.untilTomorrow): .pause(.until(nextLocalMidnight(after: now, calendar: calendar)))
+    case .pause(.untilResumed): .pause(.indefinite)
+    case .keepAwake(.thirtyMinutes): .force(.forSeconds(1800))
+    case .keepAwake(.twoHours): .force(.forSeconds(7200))
+    case .keepAwake(.untilStopped): .force(.indefinite)
+    case .releaseUntilIdle: .releaseUntilIdle
+    case .resume, .stopKeepingAwake: .resume
+    }
+  }
+
+  public static func nextLocalMidnight(after date: Date, calendar: Calendar) -> Date {
+    if let midnight = calendar.nextDate(
+      after: date, matching: DateComponents(hour: 0, minute: 0, second: 0), matchingPolicy: .nextTime)
+    {
+      return midnight
+    }
+    let startOfDay = calendar.startOfDay(for: date)
+    return calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? date.addingTimeInterval(24 * 3600)
+  }
+}
+
+public enum ControlFeedback {
+  public static let noticeSeconds: Double = 10
+  public static let sleepNowFailure = "Couldn't put the Mac to sleep. Try again."
+
+  public static func failureCopy(for action: ControlAction) -> String {
+    switch action {
+    case .pause: "Couldn't pause. Try again."
+    case .keepAwake: "Couldn't turn on \(ControlMapping.keepAwakeLabel). Try again."
+    case .resume: "Couldn't resume. Try again."
+    case .stopKeepingAwake: "Couldn't stop keeping awake. Try again."
+    case .releaseUntilIdle: "Couldn't release the hold. Try again."
+    }
+  }
+
+  public static func failed(_ response: CtlResponse?) -> Bool {
+    guard let response else { return true }
+    return !response.ok
+  }
+}
+
+public struct ControlAvailability: Sendable, Equatable {
+  public enum PauseRow: Sendable, Equatable {
+    case pauseMenu
+    case resume
+  }
+
+  public enum KeepAwakeRow: Sendable, Equatable {
+    case keepAwakeMenu
+    case stopKeepingAwake
+  }
+
+  public var pauseRow: PauseRow
+  public var keepAwakeRow: KeepAwakeRow
+  public var releaseEnabled: Bool
+  public var engineControlsEnabled: Bool
+  public var uninstalling: Bool
+
+  public init(
+    pauseRow: PauseRow, keepAwakeRow: KeepAwakeRow, releaseEnabled: Bool, engineControlsEnabled: Bool = true,
+    uninstalling: Bool = false
+  ) {
+    self.pauseRow = pauseRow
+    self.keepAwakeRow = keepAwakeRow
+    self.releaseEnabled = releaseEnabled
+    self.engineControlsEnabled = engineControlsEnabled
+    self.uninstalling = uninstalling
+  }
+
+  public var engineHelp: String? {
+    engineControlsEnabled ? nil : unavailableHelp
+  }
+
+  public var releaseHelp: String? {
+    if releaseEnabled { return nil }
+    return engineControlsEnabled ? ControlMapping.releaseUnavailableHelp : unavailableHelp
+  }
+
+  private var unavailableHelp: String {
+    uninstalling ? ControlMapping.uninstallingHelp : ControlMapping.engineUnavailableHelp
+  }
+
+  public static func from(_ presentation: StatusPresentation, snapshot: EngineSnapshot? = nil) -> ControlAvailability {
+    let paused =
+      presentation.state == .paused || presentation.state == .releasedUntilIdle || snapshot?.pause != nil
+      || snapshot?.releaseUntilIdle == true
+    let forced = presentation.state == .override || snapshot?.force != nil
+    let releaseEnabled: Bool =
+      switch presentation.state {
+      case .holding, .lidClosedHolding, .grace: true
+      default: false
+      }
+    return ControlAvailability(
+      pauseRow: paused ? .resume : .pauseMenu,
+      keepAwakeRow: forced ? .stopKeepingAwake : .keepAwakeMenu,
+      releaseEnabled: releaseEnabled,
+      engineControlsEnabled: engineControlsEnabled(presentation.state),
+      uninstalling: presentation.state == .uninstalling)
+  }
+
+  private static func engineControlsEnabled(_ state: PanelState) -> Bool {
+    if state == .uninstalling { return false }
+    guard case .error(let error) = state else { return true }
+    switch error {
+    case .holdFailed, .selfTestFailed: return true
+    case .notResponding, .couldNotStart, .watchdogUnavailable, .storageUnavailable: return false
+    }
+  }
+}
+
+public struct SleepConfirmation: Sendable, Equatable {
+  public enum Phase: Sendable, Equatable {
+    case idle
+    case confirming(shownAt: Instant)
+  }
+
+  public static let timeoutSeconds: Double = 5
+  public static let sleepNowLabel = "Sleep Now"
+  public static let prompt = "Claude is working. Sleep anyway?"
+  public static let confirmLabel = "Sleep Anyway"
+  public static let cancelLabel = "Keep Working"
+
+  public private(set) var phase: Phase = .idle
+
+  public init() {}
+
+  public var isConfirming: Bool {
+    phase != .idle
+  }
+
+  public mutating func press(busy: Bool, now: Instant) -> CtlRequest? {
+    if isConfirming { return nil }
+    guard busy else { return .sleepNow }
+    phase = .confirming(shownAt: now)
+    return nil
+  }
+
+  public mutating func confirm() -> CtlRequest {
+    phase = .idle
+    return .sleepNow
+  }
+
+  public mutating func cancel() {
+    phase = .idle
+  }
+
+  public mutating func expire(now: Instant) {
+    guard case .confirming(let shownAt) = phase, now >= shownAt.adding(seconds: Self.timeoutSeconds) else { return }
+    phase = .idle
+  }
+}

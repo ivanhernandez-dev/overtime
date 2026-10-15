@@ -1,0 +1,65 @@
+{
+  "interfaces" : [
+    {
+      "bsdName" : "en1",
+      "type" : "Ethernet"
+    },
+    {
+      "bsdName" : "bridge0",
+      "type" : "Bridge"
+    },
+    {
+      "bsdName" : "en0",
+      "type" : "IEEE80211"
+    }
+  ],
+  "store" : {
+    "State:/Network/Interface" : {
+      "Interfaces" : [
+        "lo0",
+        "en0",
+        "en1",
+        "bridge0"
+      ]
+    },
+    "State:/Network/Interface/en0/AirPort" : {
+      "Power Status" : true
+    },
+    "State:/Network/Interface/en0/IPv4" : {
+      "Addresses" : [
+        "10.0.0.1"
+      ],
+      "SubnetMasks" : [
+        "255.255.255.0"
+      ]
+    },
+    "State:/Network/Interface/en1/IPv4" : {
+      "Addresses" : [
+        "10.0.0.2"
+      ],
+      "SubnetMasks" : [
+        "255.255.255.0"
+      ]
+    },
+    "State:/Network/Service/service-1/IPv4" : {
+      "Addresses" : [
+        "10.0.0.1"
+      ],
+      "InterfaceName" : "en0",
+      "Router" : "10.0.0.3",
+      "SubnetMasks" : [
+        "255.255.255.0"
+      ]
+    },
+    "State:/Network/Service/service-2/IPv4" : {
+      "Addresses" : [
+        "10.0.0.2"
+      ],
+      "InterfaceName" : "en1",
+      "Router" : "10.0.0.3",
+      "SubnetMasks" : [
+        "255.255.255.0"
+      ]
+    }
+  }
+}

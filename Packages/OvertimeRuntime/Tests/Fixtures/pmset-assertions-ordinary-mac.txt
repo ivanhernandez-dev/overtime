@@ -1,0 +1,42 @@
+2000-01-01 00:00:00 +0000
+Assertion status system-wide:
+   BackgroundTask                 0
+   ApplePushServiceTask           0
+   UserIsActive                   1
+   PreventUserIdleDisplaySleep    1
+   SoftwareUpdateTask             0
+   PreventSystemSleep             0
+   PreventSystemSleepSecurityIndicator 0
+   ExternalMedia                  0
+   PreventUserIdleSystemSleep     1
+   NetworkClientActive            0
+Listed by owning process:
+   pid 550(coreaudiod): [0x0000000000000000] 00:00:00 PreventUserIdleSystemSleep named: "com.apple.audio.00-00-00-00-00-00:input.context.preventuseridlesleep"  
+	Created for PID: 3123. 
+	Resources: audio-in 00-00-00-00-00-00:input 
+   pid 550(coreaudiod): [0x0000000000000000] 00:00:00 PreventUserIdleSystemSleep named: "com.apple.audio.00000000-0000-0000-0000-000000000000.context.preventuseridlesleep"  
+	Created for PID: 3123. 
+	Resources: audio-in 00000000-0000-0000-0000-000000000000 
+   pid 550(coreaudiod): [0x0000000000000000] 00:00:00 PreventUserIdleSystemSleep named: "com.apple.audio.00000000-0000-0000-0000-000000000000.context.preventuseridlesleep"  
+	Created for PID: 3123. 
+	Resources: audio-in 00000000-0000-0000-0000-000000000000 
+   pid 550(coreaudiod): [0x0000000000000000] 00:00:00 PreventUserIdleSystemSleep named: "com.apple.audio.00-00-00-00-00-00:output.context.preventuseridlesleep"  
+	Created for PID: 97570. 
+	Resources: audio-out 00-00-00-00-00-00:output 
+   pid 550(coreaudiod): [0x0000000000000000] 00:00:00 PreventUserIdleSystemSleep named: "com.apple.audio.00-00-00-00-00-00:input.context.preventuseridlesleep"  
+	Created for PID: 97570. 
+	Resources: audio-in 00-00-00-00-00-00:input 
+   pid 772(sharingd): [0x0000000000000000] 00:00:00 PreventUserIdleSystemSleep named: "Handoff"  
+   pid 1249(ExampleNotes): [0x0000000000000000] 00:00:00 NoDisplaySleepAssertion named: "example"  
+   pid 864(Example Browser): [0x0000000000000000] 00:00:00 NoIdleSleepAssertion named: "example"  
+   pid 864(Example Browser): [0x0000000000000000] 00:00:00 NoIdleSleepAssertion named: "example"  
+   pid 864(Example Browser): [0x0000000000000000] 00:00:00 NoDisplaySleepAssertion named: "example"  
+   pid 357(powerd): [0x0000000000000000] 00:00:00 PreventUserIdleSystemSleep named: "Powerd - Prevent sleep while display is on"  
+   pid 548(cameracaptured): [0x0000000000000000] 00:00:00 PreventUserIdleSystemSleep named: "cameracaptured-idleSleepPreventionForBWFigCaptureDevice"  
+   pid 414(WindowServer): [0x0000000000000000] 00:00:00 UserIsActive named: "com.apple.iohideventsystem.queue.tickle"  
+	Timeout will fire in 600 secs Action=TimeoutActionRelease
+   pid 90696(caffeinate): [0x0000000000000000] 00:00:00 PreventUserIdleSystemSleep named: "caffeinate command-line tool"  
+	Details: caffeinate asserting for 300 secs
+	Localized=THE CAFFEINATE TOOL IS PREVENTING SLEEP.
+	Timeout will fire in 271 secs Action=TimeoutActionRelease
+   pid 407(bluetoothd): [0x0000000000000000] 00:00:00 PreventUserIdleSystemSleep named: "com.apple.BTStack"  

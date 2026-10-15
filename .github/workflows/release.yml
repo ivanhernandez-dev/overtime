@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  release:
+    name: Build, sign, verify and publish
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: xcode-27
+    environment: release
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install the pinned XcodeGen
+        run: /bin/bash scripts/ci/install-xcodegen.sh "$RUNNER_TEMP/xcodegen" >> "$GITHUB_PATH"
+
+      - name: Require the tagged commit to be on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - name: Import the T1 identity into a temporary keychain
+        env:
+          T1_P12_BASE64: ${{ secrets.T1_P12_BASE64 }}
+          T1_P12_PASSWORD: ${{ secrets.T1_P12_PASSWORD }}
+        run: |
+          . scripts/release/pins.env
+          keychain="$RUNNER_TEMP/overtime-release.keychain-db"
+          p12="$RUNNER_TEMP/overtime-t1.p12"
+          keychain_password="$(openssl rand -hex 32)"
+          echo "::add-mask::$keychain_password"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          (umask 077 && printf '%s' "$T1_P12_BASE64" | base64 --decode > "$p12")
+          security import "$p12" -k "$keychain" -P "$T1_P12_PASSWORD" -f pkcs12 -T /usr/bin/codesign
+          rm -f "$p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
+          keychains=("$keychain")
+          while IFS= read -r line; do
+            line="${line#*\"}"
+            keychains+=("${line%\"}")
+          done < <(security list-keychains -d user)
+          security list-keychains -d user -s "${keychains[@]}"
+          security find-identity -p codesigning "$keychain" | grep "$T1_IDENTITY_SHA1" > /dev/null
+
+      - name: Build, sign, verify and package
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          . scripts/release/pins.env
+          /bin/bash scripts/release/release.sh --identity "$T1_IDENTITY_SHA1" --version "${GITHUB_REF_NAME#v}" \
+            --out "$RUNNER_TEMP/release"
+
+      - name: Publish the release, then update the tap
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: /bin/bash scripts/release/publish.sh --from "$RUNNER_TEMP/release"
+
+      - name: Delete the temporary keychain
+        if: always()
+        run: |
+          keychain="$RUNNER_TEMP/overtime-release.keychain-db"
+          if [ -e "$keychain" ]; then
+            security delete-keychain "$keychain" || true
+          fi
+          rm -f "$RUNNER_TEMP/overtime-t1.p12"

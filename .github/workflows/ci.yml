@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  xcode-27:
+    name: Build, test, lint and dry-run release (Xcode 27)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: xcode-27
+    timeout-minutes: 90
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the pinned XcodeGen
+        run: /bin/bash scripts/ci/install-xcodegen.sh "$RUNNER_TEMP/xcodegen" >> "$GITHUB_PATH"
+
+      - name: Build
+        run: |
+          swift build --package-path Packages/OvertimeCore -Xswiftc -warnings-as-errors && swift build --package-path Packages/OvertimeRuntime -Xswiftc -warnings-as-errors && xcodegen generate --quiet && xcodebuild build -project Overtime.xcodeproj -scheme Overtime -configuration Debug -destination 'platform=macOS' -derivedDataPath "$HOME/Library/Developer/Xcode/DerivedData/Overtime-gate" CODE_SIGN_IDENTITY=- -quiet
+
+      - name: Test
+        run: |
+          swift test --package-path Packages/OvertimeCore -Xswiftc -warnings-as-errors && swift test --package-path Packages/OvertimeRuntime -Xswiftc -warnings-as-errors --no-parallel && xcodegen generate --quiet && xcodebuild test -project Overtime.xcodeproj -scheme Overtime -configuration Debug -destination 'platform=macOS' -derivedDataPath "$HOME/Library/Developer/Xcode/DerivedData/Overtime-gate" CODE_SIGN_IDENTITY=- -parallel-testing-enabled NO
+
+      - name: Lint Swift sources
+        run: |
+          xcrun swift-format lint --strict --recursive Packages Sources Tests
+          xcrun swift-format lint --strict scripts/release/edkey.swift
+
+      - name: Script tests
+        run: /bin/bash scripts/tests/run.sh
+
+      - name: Release dry-run
+        run: /bin/bash scripts/release/release.sh --dry-run --out "$RUNNER_TEMP/dry-run"
+
+      - name: Lint the rendered cask
+        run: |
+          brew tap-new --no-git overtime-ci/local
+          tap="$(brew --repository)/Library/Taps/overtime-ci/homebrew-local"
+          mkdir -p "$tap/Casks"
+          cp "$RUNNER_TEMP/dry-run/Casks/overtime.rb" "$tap/Casks/overtime.rb"
+          brew style --cask overtime-ci/local/overtime
+
+      - name: Check the helper pin is current
+        run: /bin/bash scripts/release/pin-helper.sh --check --allow-missing
+
+      - name: Lint the workflows
+        run: /bin/bash scripts/ci/actionlint.sh
+
+  macos-26:
+    name: Package tests (macOS 26)
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Test OvertimeCore
+        run: swift test --package-path Packages/OvertimeCore -Xswiftc -warnings-as-errors
+
+      - name: Test OvertimeRuntime
+        run: swift test --package-path Packages/OvertimeRuntime -Xswiftc -warnings-as-errors --no-parallel
