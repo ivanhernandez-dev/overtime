@@ -97,6 +97,10 @@ The first time Overtime opens, a short guide sets it up in seven steps: Welcome 
 </p>
 
 <p align="center">
+  <img src="docs/images/onboarding-hotspot-dark.png" width="640" alt="The Overtime setup guide on its iPhone hotspot (optional) step after choosing Auto-detect iPhone hotspot: why macOS asks for Location, what Overtime uses it for, and the Allow Location Access button">
+</p>
+
+<p align="center">
   <img src="docs/images/onboarding-complete-dark.png" width="640" alt="The Overtime setup guide on its last step, Setup complete: nothing left to do, the self-test runs on its own, and the Finish Setup button">
 </p>
 
