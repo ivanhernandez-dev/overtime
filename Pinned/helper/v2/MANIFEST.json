@@ -1,0 +1,15 @@
+{
+  "helperVersion": 2,
+  "identifier": "io.github.ivanhernandez-dev.overtime.helper",
+  "sha256": "3ff6236757ee0d28d874f3c9ee6760f66e4eba5a7bb018c7e07b7d11d8db10a1",
+  "cdhash": "1dc19d82fc6ee25c87a4c93556ec4b3e03166841",
+  "sourceCommit": "39dd641ec0ac2755315a1126cd454da6c402cde8",
+  "sources": {
+    "Packages/OvertimeRuntime/Sources/overtime-helper": "8fb352e97b918cd71574d7c04d62bd524ed8b61e",
+    "Packages/OvertimeRuntime/Sources/OvertimeHelperCore": "213de402006e65fb74d7f57947733ae5a3b731fa",
+    "Resources/LaunchDaemons/io.github.ivanhernandez-dev.overtime.helper.plist": "e1bb305329d795e451f32687bfcd9d48e3013070",
+    "Resources/LaunchDaemons/io.github.ivanhernandez-dev.overtime.dev.helper.plist": "5e8b27800724d88d7e0bbfdc6c730d7dfb958557"
+  },
+  "xcodeBuild": "27A9275",
+  "date": "2026-10-17T18:12:45Z"
+}
