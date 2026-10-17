@@ -32,7 +32,7 @@ Claude Code keeps working when you step away, but your Mac doesn't know that: it
 - **Finds Claude Code on its own:** from its running sessions and the transcripts they write. There are no hooks and nothing to change in Claude Code, and several sessions and subagents at once are fine.
 - **Lets go when the work stops:** the Mac sleeps about three minutes after Claude's last activity. You can change the timing.
 - **Never stuck awake:** quitting Overtime restores normal sleep. If it crashes, hangs or is killed, a small watchdog restores it.
-- **Respects you and the battery:** Apple menu > Sleep works as usual with the lid open, and Sleep Now and Pause in the panel always let the Mac sleep. On battery, Overtime lets go at 10%.
+- **Respects you and the battery:** Apple menu > Sleep works as usual with the lid open, and Sleep Now and Pause in the panel always let the Mac sleep. On battery, Overtime lets go at 10%, and when the battery reaches 45°C. You can change both limits or turn them off in Settings > Battery.
 - **Stays online with the lid closed (optional):** if the network drops, it can switch the Mac to your iPhone hotspot.
 - **Unplug Protection (optional):** a small helper keeps a closed Mac awake when the charger or an external display changes.
 - **Updates itself** once a day, with signed updates.
@@ -88,7 +88,7 @@ The first time Overtime opens, a short guide sets it up in seven steps: Welcome 
 | Permission | What it is for |
 |---|---|
 | Launch at login | Overtime has to be running to keep the Mac awake. The first launch turns Launch at login on, and you can turn it off in Settings > General. |
-| Notifications | Only when you need to act. There are five kinds: Keep-awake failed, Battery floor, Battery low when Claude starts, Lid-closed summary, and the Keep Awake reminder. You can turn each one off in Settings > General. |
+| Notifications | Only when you need to act. There are six kinds: Keep-awake failed, Battery floor, Battery low when Claude starts, Battery temperature, Lid-closed summary, and the Keep Awake reminder. You can turn each one off in Settings > General. |
 | Location | Optional, and only for hotspot failover: setup asks for it only after you choose your iPhone hotspot. Since macOS 14.4, apps can see the names of nearby Wi-Fi networks only with Location access. Overtime uses it only to find and join your iPhone hotspot when the network stops working with the lid closed, never reads where you are, and never stores or sends your location. Failover works without it, but joining the hotspot is less likely to succeed. |
 | Background item (Unplug Protection) | Installs the optional helper after you approve it under Allow in the Background. See [Unplug Protection](#unplug-protection). |
 
@@ -113,13 +113,13 @@ Click the Overtime icon in the menu bar to open the panel. At the top, a status 
 
 The shortcuts work while the panel is open, and in the window Overtime shows when its menu bar icon is hidden.
 
-The menu bar icon has eight states, each with its own shape, not only its own color: idle, keeping awake, lid closed, waiting to release, paused, battery low, kept awake by you, and error.
+The menu bar icon has eight states, each with its own shape, not only its own color: idle, keeping awake, lid closed, waiting to release, paused, battery low or hot, kept awake by you, and error.
 
 Settings has seven panes, in this order:
 
 - **General:** Launch at login, the display and notifications.
 - **Detection:** How Overtime tells that Claude is working.
-- **Battery:** When Overtime lets the Mac sleep on battery.
+- **Battery:** When Overtime lets the Mac sleep to protect the battery.
 - **Network:** Switching to your iPhone hotspot when the network fails.
 - **Unplug Protection:** Keeps the lid-closed Mac awake when you unplug power or a display.
 - **Diagnostics:** Detection health, the self-test and an export for bug reports.
@@ -135,7 +135,7 @@ Settings has seven panes, in this order:
 - **Hold.** With the lid open, Overtime holds a standard macOS power assertion against idle sleep and renews it while Claude works. macOS drops it within five minutes if Overtime stops renewing it, and at once when Overtime exits. With the lid closed, it uses a public macOS power-management call that tells the Mac not to sleep on lid close, without administrator rights, and sets it again when macOS resets it.
 - **Watch.** A small watchdog process runs next to the app. If Overtime crashes, hangs or is killed, the watchdog restores normal sleep first and then reopens Overtime, at most 3 times in 10 minutes. A hold left behind is cleared the next time Overtime starts, and restarting the Mac clears the lid-close setting.
 - **Release.** The Mac sleeps about three minutes after Claude's last activity: the 2-minute Transcript window plus the 1-minute Release grace, both in Settings > Detection. With the lid closed and no external display, Overtime checks about 30 seconds after letting go that the Mac went to sleep, and asks for sleep if it didn't.
-- **Stay out of the way.** With the lid closed and no external display, the display turns off so the screen locks; an external display is never turned off, and you can keep the display on with "Keep display on while Claude works". On battery, Overtime lets go at 10% and holds again on power or at 20%, both in Settings > Battery. Apple menu > Sleep works as usual with the lid open, and Sleep Now and Pause in the panel always let the Mac sleep.
+- **Stay out of the way.** With the lid closed and no external display, the display turns off so the screen locks; an external display is never turned off, and you can keep the display on with "Keep display on while Claude works". On battery, Overtime lets go at 10% and holds again on power or at 20%, both in Settings > Battery, where you can also turn battery protection off. When the battery reaches 45°C, Overtime lets go until it cools below 40°C; you can change that temperature or turn temperature protection off. Apple menu > Sleep works as usual with the lid open, and Sleep Now and Pause in the panel always let the Mac sleep.
 
 Network failover is off until you choose your iPhone hotspot, during setup or in Settings > Network, or turn on Auto-detect iPhone hotspot. It acts only with the lid closed while Claude works. It checks every 10 seconds, asking api.anthropic.com and then captive.apple.com, with no cookies and no cache. After 3 failed checks it joins the hotspot, and it switches back to your usual network when you open the lid.
 
@@ -148,12 +148,15 @@ Without Unplug Protection, a closed Mac can still go to sleep while Claude works
 It is a small helper that runs as an administrator and does one thing: while Claude works with the lid closed, it turns system sleep off (the `SleepDisabled` setting that `pmset -g` shows), and it turns it back on afterwards. While it holds, macOS can't put the Mac to sleep even in an emergency, so the helper keeps its own limits. It turns system sleep back on when:
 
 - the lid opens;
-- the battery reaches 10%, on any power source, or macOS raises a low-battery warning;
+- the battery reaches its floor, 10% unless you change it in Settings > Battery (5% to 50%), on any power source, or macOS raises a low-battery warning;
+- the battery reaches the temperature limit in Settings > Battery, or 60°C with temperature protection off, on any power source;
 - the Mac gets too hot;
 - the power or thermal state can't be read;
 - Overtime stops checking in for 55 to 60 seconds, for example because it crashed or hung.
 
 The helper accepts requests only from the Overtime app, and it is the only part of Overtime that runs as root. Without it, Overtime needs no administrator rights.
+
+The helper's floor and temperature limit can't be turned off: switching battery or temperature protection off only changes when Overtime itself lets go. When an update changes the helper, macOS asks you once to allow it again: Settings > Unplug Protection shows Needs your approval again, and you turn Overtime off and on again under Allow in the Background in System Settings > General > Login Items & Extensions.
 
 <p align="center">
   <img src="docs/images/settings-unplug-protection-dark.png" width="780" alt="Overtime Settings on the Unplug Protection pane before the helper is installed, selected in the sidebar, with its status Off and the Install Unplug Protection button">
@@ -255,7 +258,7 @@ Only foreground Claude work counts, by design: background tasks and `/loop` wake
 <details>
 <summary>Is it safe to run with the lid closed in a bag?</summary>
 
-Overtime lets go about three minutes after Claude stops and at the battery limit, and if Overtime fails, its watchdog restores normal sleep. With Unplug Protection on, the helper also lets go when the Mac gets too hot. Ventilation is still your call.
+Overtime lets go about three minutes after Claude stops and at the battery limit, and if Overtime fails, its watchdog restores normal sleep. It also lets go when the battery reaches its temperature limit, and with Unplug Protection on, the helper lets go when the Mac or its battery gets too hot. Ventilation is still your call.
 
 </details>
 

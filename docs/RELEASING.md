@@ -73,19 +73,19 @@ With `SURequireSignedFeed` and `SUVerifyUpdateBeforeExtraction` both on, the EdD
 
 ## Pin the helper
 
-**Done on 2026-10-15:** `Pinned/helper/v1` is committed and `pin-helper.sh --check` reports it current. The steps below are for the next helper version.
+**Done on 2026-10-15:** `Pinned/helper/v1` is committed. Helper version 2 (ADR 0024: the configurable floor and the temperature ceiling) changes the helper, so a release needs `Pinned/helper/v2`, made with the steps below; until it is committed, `pin-helper.sh --check` reports no pin for version 2 and a release refuses to run.
 
 The helper is signed once with the T1 identity and shipped byte-identical in every release (ADR 0010). A release refuses to run without a pin for the current `HelperIdentity.version`.
 
 1. After A-1, from a clean checkout of the commit to pin, on your Mac:
 
    ```sh
-   scripts/release/pin-helper.sh --identity 9C54A8E3E576CC8E7EB6D5A2DC63AA7607B821CE --out Pinned/helper/v1
-   codesign -d -r- Pinned/helper/v1/OvertimeHelper
+   scripts/release/pin-helper.sh --identity 9C54A8E3E576CC8E7EB6D5A2DC63AA7607B821CE --out Pinned/helper/v2
+   codesign -d -r- Pinned/helper/v2/OvertimeHelper
    ```
 
    The second command must print the helper requirement from ADR 0008: `identifier "io.github.ivanhernandez-dev.overtime.helper" and certificate root = H"9c54a8e3e576cc8e7eb6d5a2dc63aa7607b821ce"`. `pin-helper.sh` refuses to pin while a helper source path has uncommitted changes, because the build copies the working tree but the manifest records the committed ids.
-2. Commit `Pinned/helper/v1/OvertimeHelper` and `Pinned/helper/v1/MANIFEST.json` together.
+2. Commit `Pinned/helper/v2/OvertimeHelper` and `Pinned/helper/v2/MANIFEST.json` together.
 3. From then on, CI runs `pin-helper.sh --check --allow-missing` on every change. A change under the helper's source paths without a version bump fails it with a line naming the path.
 4. **Changing helper code** means bumping `HelperIdentity.version` and pinning into `Pinned/helper/v<N+1>`. Every user with unplug protection then approves the helper again once, so batch helper changes.
 5. Keep app-only code out of `OvertimeHelperCore`. CI watches all of it, so an app-only edit there forces a helper bump and a re-approval for every helper user. Put app-side code in `OvertimeHelperClient` instead.

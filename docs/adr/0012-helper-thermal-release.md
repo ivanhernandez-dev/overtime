@@ -53,3 +53,7 @@ Why B:
 Spike 005 source research on 2026-09-26 (pinned sources: xnu-12377.121.6 and PowerManagement-1846.120.8.0.1). Spike verdict: PARTIAL. By rule, the spike never induced a thermal emergency, so there is no heat test.
 
 Local reference (not needed to read this ADR): `.claude/skills/spike-findings-overtime/sources/005-helper-daemon/research-emergency-sleep.md`.
+
+## Amended by 0024 (2026-10-17)
+
+The thermal-pressure release above is unchanged. The helper also releases at a battery temperature ceiling, the app's release temperature (35 to 60 degrees Celsius) or 60 degrees with temperature protection off, through the same release sequence; a missing battery temperature sets no ceiling. REQUIREMENTS' thermal row now covers the battery temperature (BAT-05). See [0024](0024-configurable-battery-and-temperature-protection.md).
