@@ -101,12 +101,13 @@ struct OnboardingWindowTests {
     let location: SettingsWindowTests.FakeLocationStatus?
     let locationsMade = Counter()
     let opened = SettingsWindowTests.OpenedURLs()
+    let settings: SettingsModel
 
     init(
       login status: LoginItemStatus = .notRegistered, bound: Bool = true,
       notifications: NotificationAuthorization? = nil, afterRequest: NotificationAuthorization? = nil,
       location locationStatus: LocationAuthorization? = nil, helper state: HelperMonitorState = HelperMonitorState(),
-      structHost: Bool = false
+      structHost: Bool = false, hotspot: HotspotChoice = .none, networks: [String]? = []
     ) throws {
       folder = try TestFolder()
       host = FakeEngineHost(clock: clock)
@@ -120,7 +121,16 @@ struct OnboardingWindowTests {
       }
       login = PanelModelTests.FakeLoginItem(status: status)
       panel.attachLoginItem(login)
+      let settingsFile = folder.url.appendingPathComponent("settings.json")
+      if !hotspot.isNone {
+        try SettingsStore.save(hotspot.apply(to: Settings()), to: settingsFile)
+      }
       model = OnboardingModel(panel: panel, preferencesFile: folder.url.appendingPathComponent("preferences.json"))
+      let settings = SettingsModel(
+        settingsFile: settingsFile, host: host, wifi: SettingsWindowTests.FakeWiFi(networks: networks), panel: panel,
+        preferencesFile: model.preferencesFile)
+      self.settings = settings
+      model.makeSettings = { settings }
       let notifier = notifications.map { SettingsWindowTests.FakeNotificationPort($0, afterRequest: afterRequest) }
       port = notifier
       let reader = locationStatus.map { SettingsWindowTests.FakeLocationStatus($0) }
@@ -341,13 +351,13 @@ struct OnboardingWindowTests {
     fixture.model.skipStep()
     #expect(fixture.model.currentStep == .location)
     #expect(fixture.model.locationStatus == .notDetermined)
-    fixture.model.skipStep()
+    fixture.model.performDefault()
     fixture.model.performDefault()
     fixture.model.performDefault()
     #expect(fixture.model.currentStep == .selfTest)
     #expect(
       fixture.model.results == [
-        .welcome: .done, .launchAtLogin: .done, .notifications: .skipped, .location: .skipped, .checks: .done,
+        .welcome: .done, .launchAtLogin: .done, .notifications: .skipped, .location: .done, .checks: .done,
         .unplugProtection: .done,
       ])
     #expect(port.requests == 0)
@@ -370,6 +380,9 @@ struct OnboardingWindowTests {
     #expect(fixture.model.context.location == nil)
     fixture.model.continueStep()
     #expect(fixture.model.currentStep == .location)
+    #expect(fixture.model.defaultButton == Self.advance)
+    #expect(!fixture.model.showsSkip)
+    await fixture.settings.selectHotspot(.autoDetect)
     #expect(fixture.model.defaultButton == OnboardingButton(title: "Allow Location Access", action: .allowLocation))
     #expect(fixture.model.showsSkip)
     fixture.model.skipStep()
@@ -966,9 +979,7 @@ struct OnboardingWindowTests {
 
     init(login status: LoginItemStatus = .notRegistered) throws {
       onboarding = try Fixture(login: status)
-      settings = SettingsModel(
-        settingsFile: onboarding.folder.url.appendingPathComponent("settings.json"), host: onboarding.host,
-        panel: onboarding.panel, preferencesFile: onboarding.model.preferencesFile)
+      settings = onboarding.settings
       let presented = presented
       let presenter = OnboardingPresenter(model: onboarding.model) { _ in presented.increment() }
       self.presenter = presenter
@@ -1307,8 +1318,86 @@ struct OnboardingWindowTests {
     #expect(port.requests == 1)
   }
 
-  @Test func reachingTheLocationStepReadsTheStatusAndRequestsNothing() throws {
+  static let hotspotBodyNoChoice =
+    "If the network stops working while the lid is closed and Claude is working, Overtime can switch the Mac to your iPhone hotspot, and back when you open the lid. Choose your hotspot to turn this on, or continue without it."
+  static let hotspotBodyChosen =
+    "Overtime switches the Mac to this hotspot when the network stops working while the lid is closed and Claude is working. Location access is optional: without it, failover still works, but joining your hotspot is less likely to succeed."
+
+  @Test func theHotspotStepWithNoChoiceRequestsNothingAndContinues() async throws {
     let fixture = try Fixture(location: .notDetermined)
+    let location = try #require(fixture.location)
+    fixture.model.begin()
+    fixture.walk(to: .location)
+    #expect(fixture.model.currentStep == .location)
+    #expect(fixture.locationsMade.count == 1)
+    #expect(location.statusReads == 1)
+    #expect(fixture.model.settings === fixture.settings)
+    #expect(fixture.model.hotspotChoice == .none)
+    #expect(!fixture.model.context.hotspotChosen)
+    #expect(fixture.model.stepBody == Self.hotspotBodyNoChoice)
+    #expect(fixture.model.locationRow == nil)
+    #expect(fixture.model.defaultButton == Self.advance)
+    #expect(!fixture.model.showsSkip)
+    fixture.model.performDefault()
+    #expect(fixture.model.currentStep == .checks)
+    #expect(fixture.model.results[.location] == .done)
+    #expect(location.requests == 0)
+    #expect(fixture.host.appliedSettings.isEmpty)
+  }
+
+  @Test func choosingAHotspotOnTheStepSavesItExplainsLocationAndOffersIt() async throws {
+    let fixture = try Fixture(location: .notDetermined, networks: ["Team iPhone"])
+    let location = try #require(fixture.location)
+    let settings = fixture.settings
+    fixture.model.begin()
+    fixture.walk(to: .location)
+    #expect(await waitUntil { settings.knownNetworksRead })
+    let result = await settings.selectHotspot(.autoDetect)
+    #expect(result == .applied)
+    #expect(fixture.host.appliedSettings.last?.hotspotAutoDetect == true)
+    guard case .loaded(let saved) = SettingsStore.load(from: settings.settingsFile) else {
+      Issue.record("the hotspot choice was not saved")
+      return
+    }
+    #expect(saved.hotspotAutoDetect)
+    #expect(fixture.model.hotspotChoice == .autoDetect)
+    #expect(fixture.model.context.hotspotChosen)
+    #expect(fixture.model.stepBody == Self.hotspotBodyChosen)
+    #expect(fixture.model.locationRow == LocationRow.for(.notDetermined, choice: .autoDetect))
+    #expect(fixture.model.defaultButton == Self.allowLocation)
+    #expect(fixture.model.showsSkip)
+    #expect(location.requests == 0)
+    fixture.model.performDefault()
+    #expect(location.requests == 1)
+    #expect(fixture.model.inFlight == .authorization)
+    location.current = .authorized
+    fixture.model.refreshLocationStatus()
+    #expect(fixture.model.inFlight == nil)
+    await settings.selectHotspot(.none)
+    #expect(fixture.model.hotspotChoice == .none)
+    #expect(!fixture.model.context.hotspotChosen)
+    #expect(fixture.model.locationRow == nil)
+    #expect(fixture.model.defaultButton == Self.advance)
+    #expect(fixture.model.stepBody == Self.hotspotBodyNoChoice)
+    #expect(location.requests == 1)
+  }
+
+  @Test func theHotspotStepReadsTheKnownNetworksOfSettings() async throws {
+    let fixture = try Fixture(networks: ["Team iPhone"])
+    let settings = fixture.settings
+    fixture.model.begin()
+    fixture.walk(to: .notifications)
+    try? await Task.sleep(for: .milliseconds(50))
+    #expect(!settings.knownNetworksRead)
+    fixture.model.continueStep()
+    #expect(fixture.model.currentStep == .location)
+    #expect(await waitUntil { settings.knownNetworksRead })
+    #expect(settings.hotspotEntries.contains(.choice(.named("Team iPhone"))))
+    #expect(fixture.host.appliedSettings.isEmpty)
+  }
+
+  @Test func reachingTheLocationStepReadsTheStatusAndRequestsNothing() throws {
+    let fixture = try Fixture(location: .notDetermined, hotspot: .autoDetect)
     let location = try #require(fixture.location)
     fixture.model.begin()
     fixture.walk(to: .notifications)
@@ -1320,7 +1409,8 @@ struct OnboardingWindowTests {
     #expect(fixture.locationsMade.count == 1)
     #expect(location.statusReads == 1)
     #expect(location.requests == 0)
-    #expect(fixture.model.locationRow == LocationRow.for(.notDetermined))
+    #expect(fixture.model.context.hotspotChosen)
+    #expect(fixture.model.locationRow == LocationRow.for(.notDetermined, choice: .autoDetect))
     #expect(
       fixture.model.locationRow?.title == "Location access lets Overtime join your iPhone hotspot directly.")
     #expect(fixture.model.defaultButton == Self.allowLocation)
@@ -1336,7 +1426,7 @@ struct OnboardingWindowTests {
   }
 
   @Test func pressingAllowLocationAccessRequestsOnceAndTheStepFollowsTheNewStatus() throws {
-    let fixture = try Fixture(location: .notDetermined)
+    let fixture = try Fixture(location: .notDetermined, hotspot: .autoDetect)
     let location = try #require(fixture.location)
     fixture.model.begin()
     fixture.walk(to: .location)
@@ -1372,7 +1462,7 @@ struct OnboardingWindowTests {
   }
 
   @Test func anUnansweredLocationRequestStopsBlockingTheStepAfterItsBound() async throws {
-    let fixture = try Fixture(location: .notDetermined)
+    let fixture = try Fixture(location: .notDetermined, hotspot: .autoDetect)
     let location = try #require(fixture.location)
     fixture.model.authorizationWaitSeconds = 0.4
     fixture.model.begin()
@@ -1396,7 +1486,7 @@ struct OnboardingWindowTests {
   }
 
   @Test func theBoundOfAnEarlierRequestNeverEndsALaterOne() async throws {
-    let fixture = try Fixture(location: .notDetermined)
+    let fixture = try Fixture(location: .notDetermined, hotspot: .autoDetect)
     let location = try #require(fixture.location)
     let port = HeldRequestPort()
     fixture.model.notifications = port
@@ -1424,7 +1514,7 @@ struct OnboardingWindowTests {
   }
 
   @Test func aRequestNeverEndsAnInstallThatIsInFlight() async throws {
-    let fixture = try Fixture(location: .notDetermined)
+    let fixture = try Fixture(location: .notDetermined, hotspot: .autoDetect)
     let location = try #require(fixture.location)
     fixture.model.authorizationWaitSeconds = 0.2
     fixture.model.begin()
@@ -1441,7 +1531,7 @@ struct OnboardingWindowTests {
   }
 
   @Test func aLocationRequestStaysInFlightUntilItsBoundOrANewStatus() async throws {
-    let fixture = try Fixture(location: .notDetermined)
+    let fixture = try Fixture(location: .notDetermined, hotspot: .autoDetect)
     let location = try #require(fixture.location)
     fixture.model.begin()
     fixture.walk(to: .location)
@@ -1457,7 +1547,7 @@ struct OnboardingWindowTests {
 
   @Test(arguments: [LocationAuthorization.denied, .restricted])
   func locationThatIsOffShowsItsRowWithTheLinkAndOnlyContinue(_ status: LocationAuthorization) throws {
-    let fixture = try Fixture(location: status)
+    let fixture = try Fixture(location: status, hotspot: .autoDetect)
     let location = try #require(fixture.location)
     fixture.model.begin()
     fixture.walk(to: .location)
@@ -1724,7 +1814,7 @@ struct OnboardingWindowTests {
     #expect(model.screenLockRow == nil)
     #expect(model.hotspotRow == nil)
     #expect(model.checkRows == [OnboardingChecks.askToJoin])
-    model.skipStep()
+    model.continueStep()
     #expect(model.currentStep == .checks)
     #expect(await waitUntil { model.screenLockRow != nil && model.hotspotRow != nil })
     #expect(
@@ -1752,7 +1842,7 @@ struct OnboardingWindowTests {
     model.back()
     #expect(model.currentStep == .location)
     #expect(fixture.lock.reads == 1)
-    model.skipStep()
+    model.continueStep()
     #expect(await waitUntil { model.screenLockRow == OnboardingChecks.screenLock(.immediate) })
     #expect(await waitUntil { model.hotspotRow?.title == "No iPhone hotspot among your known networks." })
     #expect(fixture.lock.reads == 2)
@@ -2567,7 +2657,7 @@ struct OnboardingWindowTests {
     #expect(model.stepChanges == 5)
     model.skipStep()
     #expect(model.stepChanges == 6)
-    #expect(model.progressAccessibilityLabel == "Step 4 of 7, Location (optional)")
+    #expect(model.progressAccessibilityLabel == "Step 4 of 7, iPhone hotspot (optional)")
     model.begin()
     #expect(model.stepChanges == 7)
     #expect(model.progressAccessibilityLabel == "Step 1 of 7, Welcome to Overtime")
@@ -2580,7 +2670,8 @@ struct OnboardingWindowTests {
   @Test func theProgressElementNamesEveryStep() throws {
     let fixture = try Fixture()
     let titles = [
-      "Welcome to Overtime", "Launch at login", "Notifications", "Location (optional)", "Recommended macOS settings",
+      "Welcome to Overtime", "Launch at login", "Notifications", "iPhone hotspot (optional)",
+      "Recommended macOS settings",
       "Unplug protection (optional)", "Setup complete",
     ]
     fixture.model.begin()

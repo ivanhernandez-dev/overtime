@@ -8,26 +8,7 @@ struct NetworkPane: View {
     Form {
       SaveErrorSection(model: model)
       Section {
-        VStack(alignment: .leading, spacing: 4) {
-          Picker(HotspotChoice.pickerLabel, selection: selection) {
-            ForEach(Array(model.hotspotEntries.enumerated()), id: \.offset) { _, entry in
-              switch entry {
-              case .divider:
-                Divider()
-              case .choice(let choice):
-                Text(choice.label)
-                  .truncationMode(.middle)
-                  .tag(choice)
-              }
-            }
-          }
-          .pickerStyle(.menu)
-          .disabled(!model.canEdit)
-          .help(model.hotspotChoice.label)
-          if let caption = model.hotspotCaption {
-            SettingsSectionCaption(text: caption)
-          }
-        }
+        HotspotPickerField(model: model)
       } footer: {
         SettingsSectionCaption(text: HotspotPicker.sectionCaption)
       }
@@ -44,6 +25,33 @@ struct NetworkPane: View {
     .task {
       model.refreshLocationStatus()
       await model.readKnownNetworks()
+    }
+  }
+}
+
+struct HotspotPickerField: View {
+  let model: SettingsModel
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 4) {
+      Picker(HotspotChoice.pickerLabel, selection: selection) {
+        ForEach(Array(model.hotspotEntries.enumerated()), id: \.offset) { _, entry in
+          switch entry {
+          case .divider:
+            Divider()
+          case .choice(let choice):
+            Text(choice.label)
+              .truncationMode(.middle)
+              .tag(choice)
+          }
+        }
+      }
+      .pickerStyle(.menu)
+      .disabled(!model.canEdit)
+      .help(model.hotspotChoice.label)
+      if let caption = model.hotspotCaption {
+        SettingsSectionCaption(text: caption)
+      }
     }
   }
 

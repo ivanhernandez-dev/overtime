@@ -18,7 +18,7 @@ public enum OnboardingStep: String, Sendable, Equatable, CaseIterable, Identifia
     case .welcome: "Welcome to Overtime"
     case .launchAtLogin: "Launch at login"
     case .notifications: "Notifications"
-    case .location: "Location (optional)"
+    case .location: "iPhone hotspot (optional)"
     case .checks: "Recommended macOS settings"
     case .unplugProtection: "Unplug protection (optional)"
     case .selfTest: "Setup complete"
@@ -30,7 +30,7 @@ public enum OnboardingStep: String, Sendable, Equatable, CaseIterable, Identifia
     case .welcome: "laptopcomputer"
     case .launchAtLogin: "power"
     case .notifications: "bell.badge"
-    case .location: "location"
+    case .location: "personalhotspot"
     case .checks: "checklist"
     case .unplugProtection: "powerplug"
     case .selfTest: "checkmark.seal"
@@ -46,7 +46,7 @@ public enum OnboardingStep: String, Sendable, Equatable, CaseIterable, Identifia
     case .notifications:
       "Overtime notifies you only when you need to act: when keep-awake fails, when the battery is too low to keep going, once when you open the lid if something happened, and when \(ControlMapping.keepAwakeLabel) is left on. You can turn off each kind in Settings."
     case .location:
-      "Location is optional. Hotspot failover works without it, but with Location access, Overtime can find and join your iPhone hotspot directly. Overtime never stores or sends your location."
+      "If the network stops working while the lid is closed and Claude is working, Overtime can switch the Mac to your iPhone hotspot, and back when you open the lid. Choose your hotspot to turn this on, or continue without it."
     case .checks:
       "A few macOS settings affect how well Overtime works. You can change them now or later, and you can finish setup either way."
     case .unplugProtection:
@@ -106,11 +106,12 @@ public struct OnboardingContext: Sendable, Equatable {
   public var helperInstalled: Bool?
   public var inFlight: OnboardingInFlight?
   public var selfTest: SelfTestStatus
+  public var hotspotChosen: Bool
 
   public init(
     notifications: NotificationAuthorization? = nil, location: LocationAuthorization? = nil,
     loginItem: LoginItemStatus? = nil, helperInstalled: Bool? = nil, inFlight: OnboardingInFlight? = nil,
-    selfTest: SelfTestStatus = .notRun
+    selfTest: SelfTestStatus = .notRun, hotspotChosen: Bool = false
   ) {
     self.notifications = notifications
     self.location = location
@@ -118,6 +119,7 @@ public struct OnboardingContext: Sendable, Equatable {
     self.helperInstalled = helperInstalled
     self.inFlight = inFlight
     self.selfTest = selfTest
+    self.hotspotChosen = hotspotChosen
   }
 
   public var actionInFlight: Bool {
@@ -161,6 +163,24 @@ public enum OnboardingFlow {
       symbol: "moon.zzz", text: "When Claude finishes, or if Overtime stops, the Mac sleeps normally again."),
   ]
 
+  public static let hotspotChosenBody =
+    "Overtime switches the Mac to this hotspot when the network stops working while the lid is closed and Claude is working. Location access is optional: without it, failover still works, but joining your hotspot is less likely to succeed."
+
+  public static let locationRows = [
+    OnboardingWelcomeRow(
+      symbol: "wifi",
+      text:
+        "Since macOS 14.4, apps can see the names of nearby Wi-Fi networks only with Location access, because those names can reveal where you are."
+    ),
+    OnboardingWelcomeRow(
+      symbol: "personalhotspot",
+      text:
+        "Overtime uses it only to find and join your iPhone hotspot when the network stops working with the lid closed."
+    ),
+    OnboardingWelcomeRow(
+      symbol: "hand.raised", text: "It never reads where you are, and never stores or sends your location."),
+  ]
+
   public static func progressLabel(step: OnboardingStep, in steps: [OnboardingStep]) -> String {
     "Step \((steps.firstIndex(of: step) ?? 0) + 1) of \(steps.count)"
   }
@@ -178,6 +198,8 @@ public enum OnboardingFlow {
     switch step {
     case .launchAtLogin where context.loginItem == .enabled:
       launchAtLoginOnBody
+    case .location where context.hotspotChosen:
+      hotspotChosenBody
     default:
       step.body
     }
@@ -198,7 +220,7 @@ public enum OnboardingFlow {
     case .notifications:
       context.notifications == .notDetermined
     case .location:
-      context.location == .notDetermined
+      context.hotspotChosen && context.location == .notDetermined
     }
   }
 
@@ -216,7 +238,7 @@ public enum OnboardingFlow {
       guard context.notifications == .notDetermined else { return advance }
       return OnboardingButton(title: allowNotificationsLabel, action: .allowNotifications, enabled: idle)
     case .location:
-      guard context.location == .notDetermined else { return advance }
+      guard context.hotspotChosen, context.location == .notDetermined else { return advance }
       return OnboardingButton(title: allowLocationLabel, action: .allowLocation, enabled: idle)
     case .selfTest:
       return OnboardingButton(title: finishLabel, action: .finish)

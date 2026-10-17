@@ -1246,6 +1246,42 @@ struct AppViewSourceGuardTests {
     #expect(Self.welcomeIconFindings(in: window.text) == [])
   }
 
+  static func slice(of text: String, from start: String, to end: String) throws -> String {
+    let begin = try #require(text.range(of: start))
+    let rest = text[begin.upperBound...]
+    let stop = rest.range(of: end)?.lowerBound ?? rest.endIndex
+    return String(rest[..<stop])
+  }
+
+  @Test func theHotspotStepShowsTheSettingsPickerAndExplainsLocationAboveItsStatusRow() throws {
+    let files = try Self.appSourceFiles()
+    let steps = try #require(files.first { $0.name == "OnboardingSteps.swift" })
+    let pane = try #require(files.first { $0.name == "NetworkPane.swift" })
+    let text = steps.text.filter { !$0.isWhitespace }
+    let step = try Self.slice(of: text, from: "structOnboardingLocationStep:View{", to: "struct")
+    let picker = try #require(step.range(of: "HotspotPickerField(model:settings)"))
+    let rows = try #require(step.range(of: "OnboardingInfoRows(rows:OnboardingFlow.locationRows)"))
+    let status = try #require(step.range(of: "StatusRow("))
+    #expect(picker.upperBound <= rows.lowerBound)
+    #expect(rows.upperBound <= status.lowerBound)
+    let paneText = pane.text.filter { !$0.isWhitespace }
+    #expect(Self.occurrences(of: "HotspotPickerField(model:model)", in: paneText) == 1)
+  }
+
+  @Test func theOnboardingSharesTheSettingsModelOfTheSettingsWindow() throws {
+    let delegate = try #require(try Self.appSourceFiles().first { $0.name == "AppDelegate.swift" })
+    let text = delegate.text.filter { !$0.isWhitespace }
+    #expect(Self.occurrences(of: "onboarding.makeSettings=", in: text) == 1)
+    #expect(Self.occurrences(of: "=SettingsModel(", in: text) == 1)
+    let show = try Self.slice(of: text, from: "funcshowSettings(", to: "func")
+    #expect(Self.occurrences(of: "makeSettingsModel()", in: show) == 1)
+    let shared = try Self.slice(of: text, from: "funconboardingSettingsModel()", to: "func")
+    #expect(shared.hasPrefix("->SettingsModel?{guard!AppMode.current.isTestHostelse{returnnil}"))
+    let made = try #require(shared.range(of: "makeSettingsModel()"))
+    let synced = try #require(shared.range(of: "syncSettingsHost()"))
+    #expect(made.upperBound <= synced.lowerBound)
+  }
+
   @Test func theStepBodyComesFromTheModel() throws {
     let window = try #require(try Self.appSourceFiles().first { $0.name == Self.onboardingFile })
     let text = window.text.filter { !$0.isWhitespace }

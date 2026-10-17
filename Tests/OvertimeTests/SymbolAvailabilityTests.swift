@@ -30,7 +30,8 @@ struct SymbolAvailabilityTests {
     "exclamationmark.triangle.fill", "checkmark.circle.fill", "xmark.circle.fill", "minus.circle.fill",
     "minus.circle", "circle", "clock", "info.circle", "folder", "shield", "checkmark.shield",
     "checkmark.shield.fill", "laptopcomputer", "arrow.triangle.2.circlepath", "power", "bell.badge", "location",
-    "checklist", "checkmark.seal", "terminal", "sun.max.fill", "moon.zzz", "personalhotspot",
+    "checklist", "checkmark.seal", "terminal", "sun.max.fill", "moon.zzz", "personalhotspot", "menubar.rectangle",
+    "hand.raised",
   ]
 
   static let phaseFiveSymbols = [
@@ -89,7 +90,15 @@ struct SymbolAvailabilityTests {
   }
 
   @Test func thePhaseThreeListCoversEverySymbolInItsUISpec() {
-    #expect(Set(Self.phaseThreeSymbols).count == 29)
+    #expect(Set(Self.phaseThreeSymbols).count == 31)
+  }
+
+  @Test func theOnboardingRowsUseOnlyListedSymbols() {
+    let listed = Set(Self.phaseThreeSymbols)
+    #expect(Set(OnboardingFlow.welcomeRows.map(\.symbol)).isSubset(of: listed))
+    #expect(Set(OnboardingFlow.locationRows.map(\.symbol)).isSubset(of: listed))
+    #expect(listed.contains(OnboardingFlow.finishRow.symbol))
+    #expect(OnboardingFlow.locationRows.map(\.symbol) == ["wifi", "personalhotspot", "hand.raised"])
   }
 
   @Test func theSettingsSidebarUsesOnlyListedSymbols() {

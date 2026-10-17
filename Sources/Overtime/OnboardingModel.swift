@@ -22,6 +22,7 @@ final class OnboardingModel {
   private(set) var stepChanges = 0
   var inFlight: OnboardingInFlight?
   var helper: HelperPaneModel?
+  private(set) var settings: SettingsModel?
   private(set) var screenLockRow: CheckRow?
   private(set) var hotspotRow: CheckRow?
 
@@ -38,6 +39,7 @@ final class OnboardingModel {
   @ObservationIgnored var notifications: (any NotificationPort)?
   @ObservationIgnored var location: (any LocationStatusPort)?
   @ObservationIgnored var makeLocation: (() -> (any LocationStatusPort)?)?
+  @ObservationIgnored var makeSettings: (() -> SettingsModel?)?
   @ObservationIgnored var openURL: (URL) -> Void = { _ in }
   @ObservationIgnored var authorizationWaitSeconds = Timing.systemCallTimeoutSeconds
   @ObservationIgnored private var authorizationAnswers = 0
@@ -72,7 +74,7 @@ final class OnboardingModel {
     OnboardingContext(
       notifications: notificationAuthorization, location: locationStatus, loginItem: panel.loginItemStatus,
       helperInstalled: helperInstalled, inFlight: shownInFlight,
-      selfTest: currentStep == .selfTest ? shownSelfTest : .notRun)
+      selfTest: currentStep == .selfTest ? shownSelfTest : .notRun, hotspotChosen: !hotspotChoice.isNone)
   }
 
   var stepBody: String {
@@ -124,6 +126,10 @@ final class OnboardingModel {
     case .allowLocation:
       allowLocation()
     }
+  }
+
+  var hotspotChoice: HotspotChoice {
+    settings?.hotspotChoice ?? .none
   }
 
   var helperInstalled: Bool? {
@@ -190,7 +196,8 @@ final class OnboardingModel {
   }
 
   var locationRow: LocationRow? {
-    locationStatus.map { LocationRow.for($0) }
+    guard let locationStatus else { return nil }
+    return LocationRow.for(locationStatus, choice: hotspotChoice)
   }
 
   func openNotificationSettings() {
@@ -298,6 +305,11 @@ final class OnboardingModel {
     }
   }
 
+  private func readKnownNetworksOfSettings() {
+    guard let settings else { return }
+    Task { await settings.readKnownNetworks() }
+  }
+
   private func applyScreenLock(_ outcome: DeadlineRunner.Outcome<ScreenLockStatus>) {
     readingScreenLock = false
     let status: ScreenLockStatus = if case .value(let read) = outcome { read } else { .unknown }
@@ -370,6 +382,8 @@ final class OnboardingModel {
     case .location:
       if location == nil { location = makeLocation?() }
       refreshLocationStatus()
+      if settings == nil { settings = makeSettings?() }
+      readKnownNetworksOfSettings()
     case .selfTest:
       forgetASelfTestOfAnEarlierEngine()
       reloadSelfTestRecord()

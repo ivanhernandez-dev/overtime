@@ -193,6 +193,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     onboarding.logError = { decision in Self.logSettingsError(decision, host: host) }
     onboarding.notifications = notificationAdapter
     onboarding.makeLocation = { [weak self] in self?.sharedLocationReader() }
+    onboarding.makeSettings = { [weak self] in self?.onboardingSettingsModel() }
     onboarding.openURL = { url in NSWorkspace.shared.open(url) }
     onboarding.readScreenLock = { ScreenLockReader.read(tools: ToolRunner()) }
     onboarding.wifi = CoreWLANInfo()
@@ -341,6 +342,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     sharedSettingsModel = settingsModel
     return settingsModel
+  }
+
+  private func onboardingSettingsModel() -> SettingsModel? {
+    guard !AppMode.current.isTestHost else { return nil }
+    let settings = makeSettingsModel()
+    syncSettingsHost()
+    return settings
   }
 
   private func commitKeepDisplayOn(_ enabled: Bool) async -> SettingsCommitResult? {

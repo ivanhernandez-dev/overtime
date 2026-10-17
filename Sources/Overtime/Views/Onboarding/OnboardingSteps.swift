@@ -101,13 +101,21 @@ struct OnboardingLocationStep: View {
   let model: OnboardingModel
 
   var body: some View {
-    if let row = model.locationRow {
-      VStack(alignment: .leading, spacing: 4) {
-        StatusRow(symbol: row.symbol, tint: OnboardingStepContent.tint(for: row.tone), title: row.title)
-        if row.action == .openLocationServices {
-          Button(LocationRow.openLabel) { model.openLocationServices() }
-            .buttonStyle(.link)
-            .font(.subheadline)
+    VStack(alignment: .leading, spacing: 16) {
+      if let settings = model.settings {
+        HotspotPickerField(model: settings)
+      }
+      if model.context.hotspotChosen {
+        OnboardingInfoRows(rows: OnboardingFlow.locationRows)
+        if let row = model.locationRow {
+          VStack(alignment: .leading, spacing: 4) {
+            StatusRow(symbol: row.symbol, tint: OnboardingStepContent.tint(for: row.tone), title: row.title)
+            if row.action == .openLocationServices {
+              Button(LocationRow.openLabel) { model.openLocationServices() }
+                .buttonStyle(.link)
+                .font(.subheadline)
+            }
+          }
         }
       }
     }

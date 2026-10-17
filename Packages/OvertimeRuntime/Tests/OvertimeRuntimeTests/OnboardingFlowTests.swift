@@ -26,9 +26,9 @@ struct OnboardingFlowTests {
         "Overtime notifies you only when you need to act: when keep-awake fails, when the battery is too low to keep going, once when you open the lid if something happened, and when Keep Awake is left on. You can turn off each kind in Settings."
     ),
     StepCopy(
-      step: .location, title: "Location (optional)", symbol: "location",
+      step: .location, title: "iPhone hotspot (optional)", symbol: "personalhotspot",
       body:
-        "Location is optional. Hotspot failover works without it, but with Location access, Overtime can find and join your iPhone hotspot directly. Overtime never stores or sends your location."
+        "If the network stops working while the lid is closed and Claude is working, Overtime can switch the Mac to your iPhone hotspot, and back when you open the lid. Choose your hotspot to turn this on, or continue without it."
     ),
     StepCopy(
       step: .checks, title: "Recommended macOS settings", symbol: "checklist",
@@ -110,13 +110,47 @@ struct OnboardingFlowTests {
     #expect(Self.stepCopy.map(\.step) == OnboardingStep.allCases)
   }
 
+  static let hotspotBodyNoChoice =
+    "If the network stops working while the lid is closed and Claude is working, Overtime can switch the Mac to your iPhone hotspot, and back when you open the lid. Choose your hotspot to turn this on, or continue without it."
+  static let hotspotBodyChosen =
+    "Overtime switches the Mac to this hotspot when the network stops working while the lid is closed and Claude is working. Location access is optional: without it, failover still works, but joining your hotspot is less likely to succeed."
+  static let locationRowTexts = [
+    "Since macOS 14.4, apps can see the names of nearby Wi-Fi networks only with Location access, because those names can reveal where you are.",
+    "Overtime uses it only to find and join your iPhone hotspot when the network stops working with the lid closed.",
+    "It never reads where you are, and never stores or sends your location.",
+  ]
+  static let stalePhrases = ["later version", "will need", "is needed"]
+
   @Test func noStepSaysFailoverArrivesLaterOrThatLocationIsNeeded() {
-    for step in OnboardingStep.allCases {
-      #expect(!step.body.contains("later version"), "\(step)")
-      #expect(!step.body.contains("is needed"), "\(step)")
+    let chosen = OnboardingFlow.body(step: .location, context: OnboardingContext(hotspotChosen: true))
+    let texts = OnboardingStep.allCases.map(\.body) + [chosen] + OnboardingFlow.locationRows.map(\.text)
+    for text in texts {
+      for phrase in Self.stalePhrases {
+        #expect(!text.contains(phrase), "\(text)")
+      }
     }
-    #expect(OnboardingStep.location.title == "Location (optional)")
-    #expect(OnboardingStep.location.body.hasPrefix("Location is optional."))
+    #expect(OnboardingStep.location.title == "iPhone hotspot (optional)")
+    #expect(chosen.contains("Location access is optional"))
+  }
+
+  @Test func theHotspotStepBodyFollowsTheChoice() {
+    #expect(OnboardingStep.location.body == Self.hotspotBodyNoChoice)
+    for location in [nil, LocationAuthorization.notDetermined, .authorized, .denied, .restricted] {
+      #expect(
+        OnboardingFlow.body(step: .location, context: OnboardingContext(location: location))
+          == Self.hotspotBodyNoChoice)
+      #expect(
+        OnboardingFlow.body(step: .location, context: OnboardingContext(location: location, hotspotChosen: true))
+          == Self.hotspotBodyChosen)
+    }
+  }
+
+  @Test func theLocationStepSaysWhyWhatAndWhatNot() {
+    #expect(OnboardingFlow.locationRows.map(\.symbol) == ["wifi", "personalhotspot", "hand.raised"])
+    #expect(OnboardingFlow.locationRows.map(\.text) == Self.locationRowTexts)
+    let never = OnboardingFlow.locationRows.last?.text ?? ""
+    #expect(never.contains("never reads where you are"))
+    #expect(never.contains("never stores or sends your location"))
   }
 
   @Test func theWelcomeRowsAreTheUISpecOnes() {
@@ -224,12 +258,30 @@ struct OnboardingFlowTests {
       allowed: false),
     SkipCase(name: "notifications unread", step: .notifications, context: OnboardingContext(), allowed: false),
     SkipCase(
-      name: "location not determined", step: .location, context: OnboardingContext(location: .notDetermined),
-      allowed: true),
+      name: "location not determined, no hotspot", step: .location,
+      context: OnboardingContext(location: .notDetermined), allowed: false),
     SkipCase(
-      name: "location authorized", step: .location, context: OnboardingContext(location: .authorized), allowed: false),
-    SkipCase(name: "location denied", step: .location, context: OnboardingContext(location: .denied), allowed: false),
-    SkipCase(name: "location unread", step: .location, context: OnboardingContext(), allowed: false),
+      name: "location authorized, no hotspot", step: .location, context: OnboardingContext(location: .authorized),
+      allowed: false),
+    SkipCase(
+      name: "location denied, no hotspot", step: .location, context: OnboardingContext(location: .denied),
+      allowed: false),
+    SkipCase(name: "location unread, no hotspot", step: .location, context: OnboardingContext(), allowed: false),
+    SkipCase(
+      name: "location not determined, hotspot chosen", step: .location,
+      context: OnboardingContext(location: .notDetermined, hotspotChosen: true), allowed: true),
+    SkipCase(
+      name: "location authorized, hotspot chosen", step: .location,
+      context: OnboardingContext(location: .authorized, hotspotChosen: true), allowed: false),
+    SkipCase(
+      name: "location denied, hotspot chosen", step: .location,
+      context: OnboardingContext(location: .denied, hotspotChosen: true), allowed: false),
+    SkipCase(
+      name: "location restricted, hotspot chosen", step: .location,
+      context: OnboardingContext(location: .restricted, hotspotChosen: true), allowed: false),
+    SkipCase(
+      name: "location unread, hotspot chosen", step: .location, context: OnboardingContext(hotspotChosen: true),
+      allowed: false),
     SkipCase(
       name: "helper not installed", step: .unplugProtection, context: OnboardingContext(helperInstalled: false),
       allowed: false),
@@ -279,17 +331,38 @@ struct OnboardingFlowTests {
       button: advance),
     ButtonCase(name: "notifications unread", step: .notifications, context: OnboardingContext(), button: advance),
     ButtonCase(
-      name: "location not determined", step: .location, context: OnboardingContext(location: .notDetermined),
+      name: "location not determined, no hotspot", step: .location,
+      context: OnboardingContext(location: .notDetermined), button: advance),
+    ButtonCase(
+      name: "location request in flight, no hotspot", step: .location,
+      context: OnboardingContext(location: .notDetermined, inFlight: .authorization), button: advance),
+    ButtonCase(
+      name: "location authorized, no hotspot", step: .location, context: OnboardingContext(location: .authorized),
+      button: advance),
+    ButtonCase(
+      name: "location restricted, no hotspot", step: .location, context: OnboardingContext(location: .restricted),
+      button: advance),
+    ButtonCase(name: "location unread, no hotspot", step: .location, context: OnboardingContext(), button: advance),
+    ButtonCase(
+      name: "location not determined, hotspot chosen", step: .location,
+      context: OnboardingContext(location: .notDetermined, hotspotChosen: true),
       button: OnboardingButton(title: "Allow Location Access", action: .allowLocation)),
     ButtonCase(
-      name: "location request in flight", step: .location,
-      context: OnboardingContext(location: .notDetermined, inFlight: .authorization),
+      name: "location request in flight, hotspot chosen", step: .location,
+      context: OnboardingContext(location: .notDetermined, inFlight: .authorization, hotspotChosen: true),
       button: OnboardingButton(title: "Allow Location Access", action: .allowLocation, enabled: false)),
     ButtonCase(
-      name: "location authorized", step: .location, context: OnboardingContext(location: .authorized), button: advance),
+      name: "location authorized, hotspot chosen", step: .location,
+      context: OnboardingContext(location: .authorized, hotspotChosen: true), button: advance),
     ButtonCase(
-      name: "location restricted", step: .location, context: OnboardingContext(location: .restricted), button: advance),
-    ButtonCase(name: "location unread", step: .location, context: OnboardingContext(), button: advance),
+      name: "location denied, hotspot chosen", step: .location,
+      context: OnboardingContext(location: .denied, hotspotChosen: true), button: advance),
+    ButtonCase(
+      name: "location restricted, hotspot chosen", step: .location,
+      context: OnboardingContext(location: .restricted, hotspotChosen: true), button: advance),
+    ButtonCase(
+      name: "location unread, hotspot chosen", step: .location, context: OnboardingContext(hotspotChosen: true),
+      button: advance),
     ButtonCase(
       name: "helper not installed", step: .unplugProtection, context: OnboardingContext(helperInstalled: false),
       button: advance),
