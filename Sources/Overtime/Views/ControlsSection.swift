@@ -53,7 +53,7 @@ struct ControlsSection: View {
     switch tile.kind {
     case .pauseMenu:
       Menu {
-        ForEach(PauseChoice.allCases, id: \.self) { choice in
+        ForEach(model.pauseChoices, id: \.self) { choice in
           Button(choice.label) { model.trigger(.pause(choice)) }
         }
       } label: {
@@ -77,7 +77,7 @@ struct ControlsSection: View {
       .engineBound(availability)
     case .keepAwakeMenu:
       Menu {
-        ForEach(KeepAwakeChoice.allCases, id: \.self) { choice in
+        ForEach(model.keepAwakeChoices, id: \.self) { choice in
           Button(choice.label) { model.trigger(.keepAwake(choice)) }
         }
       } label: {

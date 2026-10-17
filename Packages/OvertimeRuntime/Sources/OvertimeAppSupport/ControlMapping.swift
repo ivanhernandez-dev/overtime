@@ -3,33 +3,63 @@ import OvertimeCore
 import OvertimeEngine
 import OvertimeSystem
 
-public enum PauseChoice: Sendable, Equatable, CaseIterable {
-  case fifteenMinutes
-  case oneHour
+public enum PauseChoice: Sendable, Hashable {
+  case timed(minutes: Int)
   case untilTomorrow
   case untilResumed
 
   public var label: String {
     switch self {
-    case .fifteenMinutes: "15 Minutes"
-    case .oneHour: "1 Hour"
+    case .timed(let minutes): DurationLabel.title(minutes: minutes)
     case .untilTomorrow: "Until Tomorrow"
     case .untilResumed: "Until Resumed"
     }
   }
+
+  public static func menu(timedMinutes: [Int]) -> [PauseChoice] {
+    DurationLabel.menuMinutes(timedMinutes).map { PauseChoice.timed(minutes: $0) } + [.untilTomorrow, .untilResumed]
+  }
+
+  public static var defaultMenu: [PauseChoice] {
+    let settings = Settings()
+    return menu(timedMinutes: [settings.pauseFirstMinutes, settings.pauseSecondMinutes])
+  }
 }
 
-public enum KeepAwakeChoice: Sendable, Equatable, CaseIterable {
-  case thirtyMinutes
-  case twoHours
+public enum KeepAwakeChoice: Sendable, Hashable {
+  case timed(minutes: Int)
   case untilStopped
 
   public var label: String {
     switch self {
-    case .thirtyMinutes: "30 Minutes"
-    case .twoHours: "2 Hours"
+    case .timed(let minutes): DurationLabel.title(minutes: minutes)
     case .untilStopped: "Until Stopped"
     }
+  }
+
+  public static func menu(timedMinutes: [Int]) -> [KeepAwakeChoice] {
+    DurationLabel.menuMinutes(timedMinutes).map { KeepAwakeChoice.timed(minutes: $0) } + [.untilStopped]
+  }
+
+  public static var defaultMenu: [KeepAwakeChoice] {
+    let settings = Settings()
+    return menu(timedMinutes: [settings.keepAwakeFirstMinutes, settings.keepAwakeSecondMinutes])
+  }
+}
+
+public enum DurationLabel {
+  public static func title(minutes: Int) -> String {
+    let hours = minutes / 60
+    let rest = minutes % 60
+    let hourPart = hours == 1 ? "1 Hour" : "\(hours) Hours"
+    let minutePart = rest == 1 ? "1 Minute" : "\(rest) Minutes"
+    if hours == 0 { return minutePart }
+    if rest == 0 { return hourPart }
+    return "\(hourPart) \(minutePart)"
+  }
+
+  static func menuMinutes(_ minutes: [Int]) -> [Int] {
+    Set(minutes.filter { Settings.presetMinutesRange.contains($0) }).sorted()
   }
 }
 
@@ -58,12 +88,10 @@ public enum ControlMapping {
 
   public static func request(for action: ControlAction, now: Date, calendar: Calendar) -> CtlRequest {
     switch action {
-    case .pause(.fifteenMinutes): .pause(.forSeconds(900))
-    case .pause(.oneHour): .pause(.forSeconds(3600))
+    case .pause(.timed(let minutes)): .pause(.forSeconds(Double(minutes) * 60))
     case .pause(.untilTomorrow): .pause(.until(nextLocalMidnight(after: now, calendar: calendar)))
     case .pause(.untilResumed): .pause(.indefinite)
-    case .keepAwake(.thirtyMinutes): .force(.forSeconds(1800))
-    case .keepAwake(.twoHours): .force(.forSeconds(7200))
+    case .keepAwake(.timed(let minutes)): .force(.forSeconds(Double(minutes) * 60))
     case .keepAwake(.untilStopped): .force(.indefinite)
     case .releaseUntilIdle: .releaseUntilIdle
     case .resume, .stopKeepingAwake: .resume

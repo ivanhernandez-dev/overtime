@@ -223,8 +223,8 @@ struct AppViewSourceGuardTests {
   static let restingTileFill = ".background(.quinary, in: CornerShapes.actionTile)"
   static let panelActionCounts: [(needle: String, expected: Int, what: String)] = [
     ("PanelActions.tiles(", 1, "reads the action tiles"),
-    ("ForEach(PauseChoice.allCases", 1, "lists the pause choices"),
-    ("ForEach(KeepAwakeChoice.allCases", 1, "lists the keep-awake choices"),
+    ("ForEach(model.pauseChoices", 1, "lists the pause choices"),
+    ("ForEach(model.keepAwakeChoices", 1, "lists the keep-awake choices"),
     (".menuIndicator(.hidden)", 1, "hides the system menu indicator"),
     (".menuIndicator(.visible)", 0, "shows the system menu indicator"),
     ("PanelRowChrome(", 3, "applies the row chrome"),
@@ -246,11 +246,11 @@ struct AppViewSourceGuardTests {
   }
 
   static let plantedTileChrome = "configuration.label.modifier(PanelRowChrome(pressed: configuration.isPressed))"
-  static let plantedPauseChoices = "ForEach(PauseChoice.allCases, id: \\.self) { choice in"
+  static let plantedPauseChoices = "ForEach(model.pauseChoices, id: \\.self) { choice in"
   static let plantedActions = [
     "let tiles = PanelActions.tiles(model.controls, confirmingSleep: model.sleepConfirmation.isConfirming)",
     plantedPauseChoices,
-    "ForEach(KeepAwakeChoice.allCases, id: \\.self) { choice in",
+    "ForEach(model.keepAwakeChoices, id: \\.self) { choice in",
     "Image(systemName: PanelActions.menuSymbol)",
     "Button(SleepConfirmation.cancelLabel) { model.keepWorking() }",
     "  .keyboardShortcut(.cancelAction)",

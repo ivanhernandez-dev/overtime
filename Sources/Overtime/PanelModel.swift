@@ -352,6 +352,16 @@ final class PanelModel {
     snapshot?.keepDisplayOn ?? false
   }
 
+  var pauseChoices: [PauseChoice] {
+    guard let snapshot else { return PauseChoice.defaultMenu }
+    return PauseChoice.menu(timedMinutes: [snapshot.pauseFirstMinutes, snapshot.pauseSecondMinutes])
+  }
+
+  var keepAwakeChoices: [KeepAwakeChoice] {
+    guard let snapshot else { return KeepAwakeChoice.defaultMenu }
+    return KeepAwakeChoice.menu(timedMinutes: [snapshot.keepAwakeFirstMinutes, snapshot.keepAwakeSecondMinutes])
+  }
+
   @discardableResult
   func perform(_ action: ControlAction) async -> CtlResponse? {
     guard controls.engineControlsEnabled else { return nil }

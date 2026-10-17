@@ -449,7 +449,7 @@ struct PanelModelTests {
     await fixture.restore()
     let model = fixture.bound.model
     fixture.bound.host.respond(with: .failure("rejected"))
-    await model.perform(.pause(.oneHour))
+    await model.perform(.pause(.timed(minutes: 60)))
     #expect(fixture.bound.host.requests == [.pause(.forSeconds(3600))])
     #expect(model.presentation.reason == EmergencyCoordinator.helperNotClearedCopy)
   }
@@ -570,8 +570,8 @@ struct PanelModelTests {
 
   @Test func controlChoicesReachTheHostAsTheirExactRequests() async {
     let bound = Bound()
-    await bound.model.perform(.pause(.oneHour))
-    await bound.model.perform(.keepAwake(.twoHours))
+    await bound.model.perform(.pause(.timed(minutes: 60)))
+    await bound.model.perform(.keepAwake(.timed(minutes: 120)))
     await bound.model.perform(.releaseUntilIdle)
     await bound.model.perform(.stopKeepingAwake)
     #expect(
@@ -586,7 +586,7 @@ struct PanelModelTests {
     bound.host.respond(with: .failure("engine says no: pause refused"))
     bound.host.publish(EngineSnapshot(busy: false, wanted: false, reason: "idle"))
     #expect(await waitUntil { bound.model.snapshot != nil })
-    let response = await bound.model.perform(.pause(.oneHour))
+    let response = await bound.model.perform(.pause(.timed(minutes: 60)))
     #expect(response?.ok == false)
     #expect(bound.model.presentation.reason == "Couldn't pause. Try again.")
     #expect(await waitUntil { bound.model.presentation.reason == Self.idleReason })
@@ -598,7 +598,7 @@ struct PanelModelTests {
     bound.host.respond(with: nil)
     bound.host.publish(EngineSnapshot(busy: false, wanted: false, reason: "idle"))
     #expect(await waitUntil { bound.model.snapshot != nil })
-    #expect(await bound.model.perform(.keepAwake(.twoHours)) == nil)
+    #expect(await bound.model.perform(.keepAwake(.timed(minutes: 120))) == nil)
     #expect(bound.host.requests == [.force(.forSeconds(7200))])
     #expect(bound.model.presentation.reason == "Couldn't turn on Keep Awake. Try again.")
   }
@@ -636,7 +636,7 @@ struct PanelModelTests {
     bound.host.respond(with: .failure("rejected"))
     bound.host.publish(EngineSnapshot(busy: false, wanted: false, reason: "idle"))
     #expect(await waitUntil { bound.model.snapshot != nil })
-    await bound.model.perform(.pause(.oneHour))
+    await bound.model.perform(.pause(.timed(minutes: 60)))
     #expect(bound.model.presentation.reason == "Couldn't pause. Try again.")
     bound.host.publish(EngineSnapshot(busy: true, wanted: true, reason: "busy"))
     #expect(await waitUntil { bound.model.presentation.state == .holding })
@@ -654,7 +654,7 @@ struct PanelModelTests {
     await bound.model.restore()?.value
     #expect(bound.model.presentation.reason == failure)
     bound.host.respond(with: .failure("rejected"))
-    await bound.model.perform(.pause(.oneHour))
+    await bound.model.perform(.pause(.timed(minutes: 60)))
     #expect(bound.host.requests == [.pause(.forSeconds(3600))])
     #expect(bound.model.presentation.reason == failure)
   }
@@ -662,7 +662,7 @@ struct PanelModelTests {
   @Test func aStartupFailureReplacesAPendingControlFailureCopyAtOnce() async {
     let model = PanelModel()
     model.controlNoticeSeconds = 60
-    #expect(await model.perform(.pause(.oneHour)) == nil)
+    #expect(await model.perform(.pause(.timed(minutes: 60))) == nil)
     #expect(model.presentation.reason == "Couldn't pause. Try again.")
     model.hostFailure = .lockHeldElsewhere
     #expect(model.presentation.state == .error(.couldNotStart))
@@ -678,7 +678,7 @@ struct PanelModelTests {
     bound.host.respond(with: .failure("rejected"))
     bound.host.publish(EngineSnapshot(busy: false, wanted: false, reason: "idle"))
     #expect(await waitUntil { bound.model.snapshot != nil })
-    await bound.model.perform(.pause(.oneHour))
+    await bound.model.perform(.pause(.timed(minutes: 60)))
     #expect(bound.model.presentation.reason == "Couldn't pause. Try again.")
     bound.model.applyRestart(.blocked(.sentinelUnavailable))
     #expect(bound.model.presentation.state == .error(.watchdogUnavailable))
@@ -692,7 +692,7 @@ struct PanelModelTests {
     bound.host.respond(with: .failure("rejected"))
     bound.host.publish(EngineSnapshot(busy: false, wanted: false, reason: "idle"))
     #expect(await waitUntil { bound.model.snapshot != nil })
-    await bound.model.perform(.pause(.oneHour))
+    await bound.model.perform(.pause(.timed(minutes: 60)))
     #expect(bound.model.presentation.reason == "Couldn't pause. Try again.")
     bound.model.unbind()
     #expect(bound.model.restoreNotice == nil)
@@ -700,7 +700,7 @@ struct PanelModelTests {
   }
 
   static let everyAction: [ControlAction] =
-    PauseChoice.allCases.map(ControlAction.pause) + KeepAwakeChoice.allCases.map(ControlAction.keepAwake) + [
+    PauseChoice.defaultMenu.map(ControlAction.pause) + KeepAwakeChoice.defaultMenu.map(ControlAction.keepAwake) + [
       .releaseUntilIdle, .resume, .stopKeepingAwake,
     ]
 
@@ -730,8 +730,31 @@ struct PanelModelTests {
     #expect(await waitUntil { bound.model.snapshot != nil })
     #expect(bound.model.presentation.state == .error(.holdFailed))
     #expect(bound.model.controls.engineControlsEnabled)
-    #expect(await bound.model.perform(.pause(.oneHour))?.ok == true)
+    #expect(await bound.model.perform(.pause(.timed(minutes: 60)))?.ok == true)
     #expect(bound.host.requests == [.pause(.forSeconds(3600))])
+  }
+
+  @Test func thePanelMenusFollowTheSnapshotDurations() async {
+    let bound = Bound()
+    bound.host.publish(
+      EngineSnapshot(
+        busy: false, wanted: false, reason: "idle", pauseFirstMinutes: 45, pauseSecondMinutes: 90,
+        keepAwakeFirstMinutes: 1440, keepAwakeSecondMinutes: 10))
+    #expect(await waitUntil { bound.model.snapshot != nil })
+    #expect(
+      bound.model.pauseChoices.map(\.label) == ["45 Minutes", "1 Hour 30 Minutes", "Until Tomorrow", "Until Resumed"])
+    #expect(bound.model.keepAwakeChoices.map(\.label) == ["10 Minutes", "24 Hours", "Until Stopped"])
+    #expect(await bound.model.perform(.pause(.timed(minutes: 45)))?.ok == true)
+    #expect(bound.host.requests == [.pause(.forSeconds(2700))])
+  }
+
+  @Test func withoutASnapshotThePanelMenusAreTheDefaultOnes() {
+    let model = PanelModel()
+    #expect(model.snapshot == nil)
+    #expect(model.pauseChoices == PauseChoice.defaultMenu)
+    #expect(model.keepAwakeChoices == KeepAwakeChoice.defaultMenu)
+    #expect(model.pauseChoices.map(\.label) == ["15 Minutes", "1 Hour", "Until Tomorrow", "Until Resumed"])
+    #expect(model.keepAwakeChoices.map(\.label) == ["30 Minutes", "2 Hours", "Until Stopped"])
   }
 
   @Test func copyCommandPutsTheFixedStringOnThePasteboardAndRunsNothing() async {
@@ -898,7 +921,7 @@ struct PanelModelTests {
     #expect(bound.model.host == nil)
     #expect(bound.model.snapshot == nil)
     #expect(bound.model.presentation.state == .error(.watchdogUnavailable))
-    #expect(await bound.model.perform(.pause(.fifteenMinutes)) == nil)
+    #expect(await bound.model.perform(.pause(.timed(minutes: 15))) == nil)
     #expect(bound.host.requests.isEmpty)
 
     try? await Task.sleep(for: .milliseconds(100))

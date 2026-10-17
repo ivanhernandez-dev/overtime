@@ -60,7 +60,7 @@ struct EngineWiringTests {
     #expect(
       model.controls == ControlAvailability(pauseRow: .pauseMenu, keepAwakeRow: .keepAwakeMenu, releaseEnabled: false))
 
-    #expect(await model.perform(.pause(.fifteenMinutes))?.ok == true)
+    #expect(await model.perform(.pause(.timed(minutes: 15)))?.ok == true)
     #expect(await waitUntil { model.presentation.glyph == .paused })
     #expect(model.presentation.title == "Paused")
     #expect(model.timingLine?.text.hasPrefix("Resumes in") == true)

@@ -37,8 +37,8 @@ struct LabelCaseTests {
       ControlMapping.pauseLabel, ControlMapping.keepAwakeLabel, ControlMapping.resumeLabel,
       ControlMapping.stopKeepingAwakeLabel, ControlMapping.releaseUntilIdleLabel, ControlMapping.restoreLabel,
     ]
-    labels += PauseChoice.allCases.map(\.label)
-    labels += KeepAwakeChoice.allCases.map(\.label)
+    labels += PauseChoice.defaultMenu.map(\.label)
+    labels += KeepAwakeChoice.defaultMenu.map(\.label)
     labels += [SleepConfirmation.sleepNowLabel, SleepConfirmation.confirmLabel, SleepConfirmation.cancelLabel]
     labels += hintActions.map(\.label)
     labels += [SleepDisabledClearing.turnOnLabel, SleepDisabledClearing.copyLabel, CopyConfirmation.copiedLabel]
@@ -102,7 +102,7 @@ struct LabelCaseTests {
 
   @Test func theSentencesThatNameAControlUseItsLabel() {
     let keepAwake = ControlMapping.keepAwakeLabel
-    for choice in KeepAwakeChoice.allCases {
+    for choice in KeepAwakeChoice.defaultMenu {
       #expect(ControlFeedback.failureCopy(for: .keepAwake(choice)) == Self.keepAwakeFailure)
     }
     #expect(Self.keepAwakeFailure.contains(keepAwake))

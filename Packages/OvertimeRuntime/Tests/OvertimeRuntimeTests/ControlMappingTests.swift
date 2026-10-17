@@ -22,14 +22,17 @@ struct ControlMappingTests {
   }
 
   static let mappings: [MappingCase] = [
-    MappingCase(action: .pause(.fifteenMinutes), request: .pause(.forSeconds(900))),
-    MappingCase(action: .pause(.oneHour), request: .pause(.forSeconds(3600))),
+    MappingCase(action: .pause(.timed(minutes: 15)), request: .pause(.forSeconds(900))),
+    MappingCase(action: .pause(.timed(minutes: 60)), request: .pause(.forSeconds(3600))),
+    MappingCase(action: .pause(.timed(minutes: 45)), request: .pause(.forSeconds(2700))),
+    MappingCase(action: .pause(.timed(minutes: 1440)), request: .pause(.forSeconds(86400))),
     MappingCase(
       action: .pause(.untilTomorrow),
       request: .pause(.until(ControlMapping.nextLocalMidnight(after: now, calendar: madrid)))),
     MappingCase(action: .pause(.untilResumed), request: .pause(.indefinite)),
-    MappingCase(action: .keepAwake(.thirtyMinutes), request: .force(.forSeconds(1800))),
-    MappingCase(action: .keepAwake(.twoHours), request: .force(.forSeconds(7200))),
+    MappingCase(action: .keepAwake(.timed(minutes: 30)), request: .force(.forSeconds(1800))),
+    MappingCase(action: .keepAwake(.timed(minutes: 120)), request: .force(.forSeconds(7200))),
+    MappingCase(action: .keepAwake(.timed(minutes: 90)), request: .force(.forSeconds(5400))),
     MappingCase(action: .keepAwake(.untilStopped), request: .force(.indefinite)),
     MappingCase(action: .releaseUntilIdle, request: .releaseUntilIdle),
     MappingCase(action: .resume, request: .resume),
@@ -54,14 +57,46 @@ struct ControlMappingTests {
   }
 
   @Test func menuLabelsMatchTheUISpecVerbatim() {
-    #expect(PauseChoice.allCases.map(\.label) == ["15 Minutes", "1 Hour", "Until Tomorrow", "Until Resumed"])
-    #expect(KeepAwakeChoice.allCases.map(\.label) == ["30 Minutes", "2 Hours", "Until Stopped"])
+    #expect(PauseChoice.defaultMenu.map(\.label) == ["15 Minutes", "1 Hour", "Until Tomorrow", "Until Resumed"])
+    #expect(KeepAwakeChoice.defaultMenu.map(\.label) == ["30 Minutes", "2 Hours", "Until Stopped"])
     #expect(ControlMapping.pauseLabel == "Pause")
     #expect(ControlMapping.keepAwakeLabel == "Keep Awake")
     #expect(ControlMapping.resumeLabel == "Resume")
     #expect(ControlMapping.stopKeepingAwakeLabel == "Stop Keeping Awake")
     #expect(ControlMapping.releaseUntilIdleLabel == "Release Until Idle")
     #expect(ControlMapping.releaseUnavailableHelp == "Available while Claude is keeping the Mac awake.")
+  }
+
+  @Test(arguments: [
+    (1, "1 Minute"), (2, "2 Minutes"), (15, "15 Minutes"), (45, "45 Minutes"), (59, "59 Minutes"), (60, "1 Hour"),
+    (61, "1 Hour 1 Minute"), (90, "1 Hour 30 Minutes"), (120, "2 Hours"), (125, "2 Hours 5 Minutes"),
+    (1439, "23 Hours 59 Minutes"), (1440, "24 Hours"),
+  ])
+  func generatedLabelsNameMinutesAndHoursInTitleCase(_ minutes: Int, _ label: String) {
+    #expect(DurationLabel.title(minutes: minutes) == label)
+  }
+
+  @Test func everyDurationInTheRangeHasATitleCaseLabel() {
+    var labels: Set<String> = []
+    for minutes in Settings.presetMinutesRange {
+      let label = DurationLabel.title(minutes: minutes)
+      #expect(LabelCaseTests.titleCaseFindings(label).isEmpty, "\(minutes): \(label)")
+      labels.insert(label)
+    }
+    #expect(labels.count == Settings.presetMinutesRange.count)
+  }
+
+  @Test func theMenusSortTheTimedChoicesAndDropADuplicate() {
+    #expect(
+      PauseChoice.menu(timedMinutes: [120, 30]) == [
+        .timed(minutes: 30), .timed(minutes: 120), .untilTomorrow, .untilResumed,
+      ])
+    #expect(PauseChoice.menu(timedMinutes: [45, 45]) == [.timed(minutes: 45), .untilTomorrow, .untilResumed])
+    #expect(PauseChoice.menu(timedMinutes: [0, 2000]) == [.untilTomorrow, .untilResumed])
+    #expect(
+      KeepAwakeChoice.menu(timedMinutes: [120, 30]) == [.timed(minutes: 30), .timed(minutes: 120), .untilStopped])
+    #expect(KeepAwakeChoice.menu(timedMinutes: [45, 45]) == [.timed(minutes: 45), .untilStopped])
+    #expect(KeepAwakeChoice.menu(timedMinutes: [0, 2000]) == [.untilStopped])
   }
 
   struct AvailabilityCase: Sendable, CustomTestStringConvertible {
@@ -197,12 +232,12 @@ struct ControlMappingTests {
   }
 
   static let failures: [FailureCase] = [
-    FailureCase(action: .pause(.fifteenMinutes), copy: "Couldn't pause. Try again."),
-    FailureCase(action: .pause(.oneHour), copy: "Couldn't pause. Try again."),
+    FailureCase(action: .pause(.timed(minutes: 15)), copy: "Couldn't pause. Try again."),
+    FailureCase(action: .pause(.timed(minutes: 60)), copy: "Couldn't pause. Try again."),
     FailureCase(action: .pause(.untilTomorrow), copy: "Couldn't pause. Try again."),
     FailureCase(action: .pause(.untilResumed), copy: "Couldn't pause. Try again."),
-    FailureCase(action: .keepAwake(.thirtyMinutes), copy: "Couldn't turn on Keep Awake. Try again."),
-    FailureCase(action: .keepAwake(.twoHours), copy: "Couldn't turn on Keep Awake. Try again."),
+    FailureCase(action: .keepAwake(.timed(minutes: 30)), copy: "Couldn't turn on Keep Awake. Try again."),
+    FailureCase(action: .keepAwake(.timed(minutes: 120)), copy: "Couldn't turn on Keep Awake. Try again."),
     FailureCase(action: .keepAwake(.untilStopped), copy: "Couldn't turn on Keep Awake. Try again."),
     FailureCase(action: .resume, copy: "Couldn't resume. Try again."),
     FailureCase(action: .stopKeepingAwake, copy: "Couldn't stop keeping awake. Try again."),
