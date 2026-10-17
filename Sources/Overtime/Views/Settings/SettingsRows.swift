@@ -7,6 +7,7 @@ struct NumericSettingRow: View {
   let caption: String?
   let field: SettingsField
   let model: SettingsModel
+  var secondary = false
   @FocusState private var focused: Bool
 
   var body: some View {
@@ -26,9 +27,11 @@ struct NumericSettingRow: View {
           stepper
           Text(unit)
             .monospacedDigit()
+            .foregroundStyle(labelStyle)
         }
       } label: {
         Text(label)
+          .foregroundStyle(labelStyle)
       }
       if let message {
         ValidationLine(message: message)
@@ -49,6 +52,10 @@ struct NumericSettingRow: View {
       guard let message else { return }
       AccessibilityNotification.Announcement(message).post()
     }
+  }
+
+  private var labelStyle: HierarchicalShapeStyle {
+    secondary ? .secondary : .primary
   }
 
   private var textBinding: Binding<String> {

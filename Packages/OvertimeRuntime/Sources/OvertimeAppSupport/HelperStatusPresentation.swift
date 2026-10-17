@@ -144,7 +144,7 @@ public enum HelperStatusPresentation {
   public static let aboutNotes = [
     "Installing it needs one approval in System Settings. While you approve it, Overtime's login item may briefly show that it needs approval too.",
     "It runs as an administrator and does one thing: it turns system sleep off while Claude works with the lid closed, and back on afterwards.",
-    "While it holds the Mac on battery, macOS can't put the Mac to sleep in an emergency. The helper lets go at 10% battery or if the Mac gets too hot.",
+    "While it holds the Mac on battery, macOS can't put the Mac to sleep in an emergency. The helper lets go at its battery floor or temperature limit, both in Settings > Battery, or if the Mac gets too hot.",
     "Turning it off in System Settings also quits Overtime. Open Overtime again afterwards.",
   ]
 

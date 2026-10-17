@@ -467,6 +467,51 @@ final class SettingsModel {
     }
   }
 
+  var batteryProtectionEnabled: Bool {
+    settings.batteryProtectionEnabled
+  }
+
+  @discardableResult
+  func setBatteryProtectionEnabled(_ enabled: Bool) async -> SettingsCommitResult? {
+    await serialized { [self] in
+      guard settings.batteryProtectionEnabled != enabled else { return nil }
+      var candidate = settings
+      candidate.batteryProtectionEnabled = enabled
+      return await save(candidate)
+    }
+  }
+
+  var temperatureProtectionEnabled: Bool {
+    settings.temperatureProtectionEnabled
+  }
+
+  @discardableResult
+  func setTemperatureProtectionEnabled(_ enabled: Bool) async -> SettingsCommitResult? {
+    await serialized { [self] in
+      guard settings.temperatureProtectionEnabled != enabled else { return nil }
+      var candidate = settings
+      candidate.temperatureProtectionEnabled = enabled
+      return await save(candidate)
+    }
+  }
+
+  var batteryTemperature: BatteryTemperatureReading? {
+    panel?.snapshot?.batteryTemperature
+  }
+
+  var batteryTemperatureText: String {
+    Self.batteryTemperatureText(batteryTemperature)
+  }
+
+  static func batteryTemperatureText(_ reading: BatteryTemperatureReading?) -> String {
+    switch reading {
+    case .celsius(let celsius)?: "\(celsius)°C"
+    case .unavailable?: "Unavailable"
+    case .unreadable?: "Can't be read"
+    case nil: "Not read yet"
+    }
+  }
+
   var launchAtLogin: Bool {
     panel?.launchAtLogin ?? false
   }
@@ -567,7 +612,7 @@ final class SettingsModel {
 
   static func stepSize(for field: SettingsField) -> Int {
     switch field {
-    case .batteryLowPercent, .batteryResumePercent:
+    case .batteryLowPercent, .batteryResumePercent, .helperBatteryFloorPercent, .temperatureReleaseCelsius:
       1
     case .transcriptWindowSeconds:
       10
@@ -668,6 +713,10 @@ final class SettingsModel {
       Int(settings.releaseGraceSeconds.rounded())
     case .stuckWindowMinutes:
       Int((settings.stuckWindowSeconds / 60).rounded(.up))
+    case .helperBatteryFloorPercent:
+      settings.helperBatteryFloorPercent
+    case .temperatureReleaseCelsius:
+      settings.temperatureReleaseCelsius
     }
   }
 
@@ -683,6 +732,10 @@ final class SettingsModel {
       Int(Settings.releaseGraceRange.lowerBound)...Int(Settings.releaseGraceRange.upperBound)
     case .stuckWindowMinutes:
       Int(Settings.stuckWindowMinSeconds / 60)...Int(Settings.stuckWindowMaxSeconds / 60)
+    case .helperBatteryFloorPercent:
+      Settings.helperBatteryFloorRange
+    case .temperatureReleaseCelsius:
+      Settings.temperatureReleaseRange
     }
   }
 }

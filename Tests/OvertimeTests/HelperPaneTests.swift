@@ -989,7 +989,7 @@ struct HelperPaneTests {
       UnplugProtectionPane.aboutNotes == [
         "Installing it needs one approval in System Settings. While you approve it, Overtime's login item may briefly show that it needs approval too.",
         "It runs as an administrator and does one thing: it turns system sleep off while Claude works with the lid closed, and back on afterwards.",
-        "While it holds the Mac on battery, macOS can't put the Mac to sleep in an emergency. The helper lets go at 10% battery or if the Mac gets too hot.",
+        "While it holds the Mac on battery, macOS can't put the Mac to sleep in an emergency. The helper lets go at its battery floor or temperature limit, both in Settings > Battery, or if the Mac gets too hot.",
         "Turning it off in System Settings also quits Overtime. Open Overtime again afterwards.",
       ])
   }
@@ -1008,7 +1008,7 @@ struct HelperPaneTests {
     (HelperMonitorState(installer: .requiresApproval), true), (HelperPaneTests.standingBy, true),
     (HelperMonitorState(), false),
   ])
-  func theBatteryPaneShowsTheHelperCaptionOnlyWhenTheHelperIsInstalled(
+  func theBatteryPaneShowsTheFloorRowOnlyWhenTheHelperIsInstalled(
     _ state: HelperMonitorState, _ installed: Bool
   ) async throws {
     let folder = try TestFolder()
@@ -1017,8 +1017,11 @@ struct HelperPaneTests {
     #expect(!settings.helperInstalled)
     await fixture.show(state)
     #expect(settings.helperInstalled == installed)
-    #expect(BatteryPane.helperCaption == "Unplug protection also releases at 10% on its own. That limit is fixed.")
-    #expect(BatteryPane.helperCaption.contains("\(HelperSafetyLimits.defaultBatteryFloorPercent)%"))
+    #expect(
+      BatteryPane.helperFloorCaption
+        == "Unplug protection lets the Mac sleep at this level on battery or on power, and also when macOS warns that the battery is low. It applies even with battery protection off, and it can't be turned off."
+    )
+    #expect(!BatteryPane.helperFloorCaption.contains("fixed"))
   }
 
   @Test(arguments: HelperUIState.allCases)

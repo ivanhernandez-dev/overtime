@@ -205,7 +205,8 @@ struct SettingsEditorTests {
       case .transcriptWindowSeconds: raw.transcriptWindowSeconds = value
       case .releaseGraceSeconds: raw.releaseGraceSeconds = value
       case .stuckWindowMinutes: raw.stuckWindowSeconds = value * 60
-      case .batteryLowPercent, .batteryResumePercent: Issue.record("not a timing field")
+      case .batteryLowPercent, .batteryResumePercent, .helperBatteryFloorPercent, .temperatureReleaseCelsius:
+        Issue.record("not a timing field")
       }
       switch SettingsEditor.validate(field, text: text, in: base) {
       case .success(let candidate):
@@ -215,6 +216,43 @@ struct SettingsEditorTests {
         #expect(Self.flaggedByTheCore(raw), "\(field) \(text)")
       }
     }
+  }
+
+  @Test func theHelperFloorFieldTakesFiveToFifty() throws {
+    for text in ["4", "51", "x", "0", ""] {
+      let result = SettingsEditor.validate(.helperBatteryFloorPercent, text: text, in: Settings())
+      #expect(Self.rejected(result) == "Enter a whole percentage from 5 to 50.", "\(text)")
+    }
+    for value in [5, 25, 50] {
+      let result = SettingsEditor.validate(.helperBatteryFloorPercent, text: "\(value)", in: Settings())
+      let candidate = try #require(Self.accepted(result), "\(value)")
+      #expect(candidate == Settings(helperBatteryFloorPercent: value))
+      #expect(!Self.flaggedByTheCore(candidate))
+    }
+    #expect(SettingsEditor.helperFloorRangeMessage == "Enter a whole percentage from 5 to 50.")
+  }
+
+  @Test func theReleaseTemperatureFieldTakesThirtyFiveToSixty() throws {
+    for text in ["34", "61", "x", ""] {
+      let result = SettingsEditor.validate(.temperatureReleaseCelsius, text: text, in: Settings())
+      #expect(Self.rejected(result) == "Enter a whole number of degrees from 35 to 60.", "\(text)")
+    }
+    for value in [35, 45, 60] {
+      let result = SettingsEditor.validate(.temperatureReleaseCelsius, text: "\(value)", in: Settings())
+      let candidate = try #require(Self.accepted(result), "\(value)")
+      #expect(candidate == Settings(temperatureReleaseCelsius: value))
+      #expect(!Self.flaggedByTheCore(candidate))
+    }
+    #expect(SettingsEditor.temperatureReleaseRangeMessage == "Enter a whole number of degrees from 35 to 60.")
+  }
+
+  @Test func theNewFieldsAreTheSettingsKeys() {
+    #expect(SettingsField.helperBatteryFloorPercent.rawValue == "helperBatteryFloorPercent")
+    #expect(SettingsField.temperatureReleaseCelsius.rawValue == "temperatureReleaseCelsius")
+    let floor = Settings(helperBatteryFloorPercent: 99)
+    #expect(floor.validated().adjustments.map(\.key) == [SettingsField.helperBatteryFloorPercent.rawValue])
+    let release = Settings(temperatureReleaseCelsius: 99)
+    #expect(release.validated().adjustments.map(\.key) == [SettingsField.temperatureReleaseCelsius.rawValue])
   }
 
   @Test(arguments: ["", "   "])

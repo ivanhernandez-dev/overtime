@@ -8,6 +8,8 @@ public enum SettingsField: String, Sendable, CaseIterable {
   case transcriptWindowSeconds
   case releaseGraceSeconds
   case stuckWindowMinutes
+  case helperBatteryFloorPercent
+  case temperatureReleaseCelsius
 }
 
 public struct SettingsValidationError: Error, Sendable, Equatable {
@@ -20,6 +22,13 @@ public struct SettingsValidationError: Error, Sendable, Equatable {
 
 public enum SettingsEditor {
   public static let releaseAtRangeMessage = "Enter a whole percentage from 1 to 50."
+  public static let helperFloorRangeMessage = rangeMessage("a whole percentage", Settings.helperBatteryFloorRange)
+  public static let temperatureReleaseRangeMessage = rangeMessage(
+    "a whole number of degrees", Settings.temperatureReleaseRange)
+
+  static func rangeMessage(_ kind: String, _ range: ClosedRange<Int>) -> String {
+    "Enter \(kind) from \(range.lowerBound) to \(range.upperBound)."
+  }
   public static let transcriptWindowRangeMessage = "Enter a whole number of seconds from 10 to 3600."
   public static let releaseGraceRangeMessage = "Enter a whole number of seconds from 1 to 3600."
   public static let stuckLimitRangeMessage = "Enter a whole number of minutes from 1 to 240."
@@ -182,6 +191,10 @@ public enum SettingsEditor {
       candidate.releaseGraceSeconds = Double(value)
     case .stuckWindowMinutes:
       candidate.stuckWindowSeconds = Double(value) * 60
+    case .helperBatteryFloorPercent:
+      candidate.helperBatteryFloorPercent = value
+    case .temperatureReleaseCelsius:
+      candidate.temperatureReleaseCelsius = value
     }
     return candidate
   }
@@ -198,6 +211,10 @@ public enum SettingsEditor {
       SettingsValidationError(message: releaseGraceRangeMessage)
     case .stuckWindowMinutes:
       SettingsValidationError(message: stuckLimitRangeMessage)
+    case .helperBatteryFloorPercent:
+      SettingsValidationError(message: helperFloorRangeMessage)
+    case .temperatureReleaseCelsius:
+      SettingsValidationError(message: temperatureReleaseRangeMessage)
     }
   }
 
@@ -241,6 +258,12 @@ public enum SettingsEditor {
           message: stuckLimitShorterThanWindowMessage(transcriptWindowSeconds: settings.transcriptWindowSeconds))
       }
       return nil
+    case .helperBatteryFloorPercent:
+      return Settings.helperBatteryFloorRange.contains(settings.helperBatteryFloorPercent)
+        ? nil : rangeError(field, in: settings)
+    case .temperatureReleaseCelsius:
+      return Settings.temperatureReleaseRange.contains(settings.temperatureReleaseCelsius)
+        ? nil : rangeError(field, in: settings)
     }
   }
 }
