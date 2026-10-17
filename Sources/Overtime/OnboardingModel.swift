@@ -16,7 +16,6 @@ final class OnboardingModel {
   private(set) var selfTestRecord: SelfTestRecord?
   private(set) var requestingSelfTest = false
   private(set) var selfTestRequested = false
-  private(set) var selfTestRunsAtEntry: UInt64?
   @ObservationIgnored private var selfTestEngine: UUID?
   private(set) var notificationAuthorization: NotificationAuthorization?
   private(set) var locationStatus: LocationAuthorization?
@@ -59,7 +58,6 @@ final class OnboardingModel {
     steps = OnboardingStep.allCases
     results = [:]
     selfTestRequested = false
-    selfTestRunsAtEntry = nil
     selfTestEngine = nil
     installPressed = false
     inFlight = nil
@@ -330,15 +328,11 @@ final class OnboardingModel {
   }
 
   var shownSelfTest: SelfTestStatus {
-    let snapshot = panel.snapshot
-    let runs = snapshot?.selfTestRuns ?? 0
-    return OnboardingFlow.shownSelfTest(
-      status: snapshot?.selfTest ?? .notRun, runs: runs, runsAtEntry: selfTestRunsAtEntry ?? runs,
-      requesting: requestingSelfTest, requested: selfTestRequested)
+    OnboardingFlow.shownSelfTest(status: panel.snapshot?.selfTest ?? .notRun, requesting: requestingSelfTest)
   }
 
   var selfTestRow: SelfTestRow {
-    SelfTestPresentation.row(status: shownSelfTest, record: selfTestRecord, currentBuild: panel.snapshot?.osBuild)
+    OnboardingFlow.selfTestRow(status: shownSelfTest, record: selfTestRecord, currentBuild: panel.snapshot?.osBuild)
   }
 
   var selfTestNote: String? {
@@ -367,7 +361,6 @@ final class OnboardingModel {
     guard let asked = selfTestEngine, let host = panel.host, host.engineToken != asked else { return }
     selfTestEngine = nil
     selfTestRequested = false
-    selfTestRunsAtEntry = nil
   }
 
   func reloadSelfTestRecord() {
@@ -394,7 +387,6 @@ final class OnboardingModel {
       refreshLocationStatus()
     case .selfTest:
       forgetASelfTestOfAnEarlierEngine()
-      if selfTestRunsAtEntry == nil { selfTestRunsAtEntry = panel.snapshot?.selfTestRuns ?? 0 }
       reloadSelfTestRecord()
       startSelfTestIfDue()
     case .checks:

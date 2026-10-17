@@ -21,7 +21,7 @@ public enum OnboardingStep: String, Sendable, Equatable, CaseIterable, Identifia
     case .location: "Location (optional)"
     case .checks: "Check your setup"
     case .unplugProtection: "Unplug protection (optional)"
-    case .selfTest: "Test keep-awake"
+    case .selfTest: "Setup complete"
     }
   }
 
@@ -52,7 +52,7 @@ public enum OnboardingStep: String, Sendable, Equatable, CaseIterable, Identifia
     case .unplugProtection:
       "With the lid closed, macOS can still sleep when you unplug the charger or a display, even while Claude works. Unplug protection prevents this with a small helper that runs as an administrator."
     case .selfTest:
-      "Overtime briefly turns its lid-close control on and off to check that it works on this Mac. The display and the Mac are not affected. \(OnboardingFlow.finishHint)"
+      "There's nothing left to do. Overtime checks on its own that it can keep this Mac awake, and the check doesn't affect the display."
     }
   }
 }
@@ -141,11 +141,17 @@ public enum OnboardingFlow {
   public static let backLabel = "Back"
   public static let skipLabel = "Skip This Step"
   public static let finishLabel = "Finish Setup"
-  public static let finishHint = "Overtime lives in the menu bar. \(finishLabel) opens it."
+  public static let finishHint = "Overtime lives in the menu bar. \(finishLabel) opens its panel."
+  public static let finishRow = OnboardingWelcomeRow(symbol: "menubar.rectangle", text: finishHint)
+  public static let selfTestWaitingSymbol = "info.circle"
+  public static let selfTestWaitingTitle = "Runs on its own"
+  public static let selfTestWaitingCaption =
+    "It runs each time Overtime starts, once the lid is open and Claude isn't working. The result appears under Self-test in Settings > Diagnostics."
   public static let allowNotificationsLabel = "Allow Notifications"
   public static let allowLocationLabel = "Allow Location Access"
   public static let installHelperLabel = "Install Unplug Protection…"
-  public static let selfTestFailedCaption = "You can finish setup. Overtime shows an error until the test passes."
+  public static let selfTestFailedCaption =
+    "You can still finish setup. Overtime shows an error in the menu bar until the check passes."
 
   public static let welcomeRows = [
     OnboardingWelcomeRow(
@@ -211,17 +217,29 @@ public enum OnboardingFlow {
       guard context.helperInstalled == false, !context.installPressed else { return advance }
       return OnboardingButton(title: installHelperLabel, action: .installHelper, enabled: idle)
     case .selfTest:
-      return OnboardingButton(title: finishLabel, action: .finish, enabled: context.selfTest != .running)
+      return OnboardingButton(title: finishLabel, action: .finish)
     }
   }
 
-  public static func shownSelfTest(
-    status: SelfTestStatus, runs: UInt64, runsAtEntry: UInt64, requesting: Bool, requested: Bool
-  ) -> SelfTestStatus {
-    if requesting || status == .running { return .running }
-    if runs > runsAtEntry { return status }
-    if requested, case .skipped = status { return status }
-    return .waiting
+  public static func shownSelfTest(status: SelfTestStatus, requesting: Bool) -> SelfTestStatus {
+    if requesting { return .running }
+    switch status {
+    case .running, .passed, .failed, .skipped: return status
+    case .notRun, .waiting: return .waiting
+    }
+  }
+
+  public static func selfTestRow(
+    status: SelfTestStatus, record: SelfTestRecord?, currentBuild: String?
+  ) -> SelfTestRow {
+    switch status {
+    case .waiting:
+      SelfTestRow(
+        icon: .symbol(selfTestWaitingSymbol), tone: .secondary, title: selfTestWaitingTitle,
+        caption: selfTestWaitingCaption)
+    case .notRun, .running, .passed, .failed, .skipped:
+      SelfTestPresentation.row(status: status, record: record, currentBuild: currentBuild)
+    }
   }
 
   public static func record(

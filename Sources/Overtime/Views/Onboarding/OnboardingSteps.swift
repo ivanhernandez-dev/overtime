@@ -48,19 +48,35 @@ struct OnboardingStepContent: View {
 
 struct OnboardingWelcomeStep: View {
   var body: some View {
+    OnboardingInfoRows(rows: OnboardingFlow.welcomeRows)
+  }
+}
+
+struct OnboardingInfoRows: View {
+  let rows: [OnboardingWelcomeRow]
+
+  var body: some View {
     VStack(alignment: .leading, spacing: 8) {
-      ForEach(OnboardingFlow.welcomeRows) { row in
-        HStack(alignment: .firstTextBaseline, spacing: StatusRowLayout.iconGap) {
-          Image(systemName: row.symbol)
-            .foregroundStyle(.secondary)
-            .frame(width: StatusRowLayout.iconWidth)
-            .accessibilityHidden(true)
-          Text(row.text)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-        .accessibilityElement(children: .combine)
+      ForEach(rows) { row in
+        OnboardingInfoRow(row: row)
       }
     }
+  }
+}
+
+struct OnboardingInfoRow: View {
+  let row: OnboardingWelcomeRow
+
+  var body: some View {
+    HStack(alignment: .firstTextBaseline, spacing: StatusRowLayout.iconGap) {
+      Image(systemName: row.symbol)
+        .foregroundStyle(.secondary)
+        .frame(width: StatusRowLayout.iconWidth)
+        .accessibilityHidden(true)
+      Text(row.text)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+    .accessibilityElement(children: .combine)
   }
 }
 
@@ -129,15 +145,18 @@ struct OnboardingSelfTestStep: View {
   let model: OnboardingModel
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      SelfTestRowView(row: model.selfTestRow)
-      if let note = model.selfTestNote {
-        Text(note)
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-          .fixedSize(horizontal: false, vertical: true)
-          .padding(.leading, StatusRowLayout.textInset)
+    VStack(alignment: .leading, spacing: 16) {
+      VStack(alignment: .leading, spacing: 8) {
+        SelfTestRowView(row: model.selfTestRow)
+        if let note = model.selfTestNote {
+          Text(note)
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.leading, StatusRowLayout.textInset)
+        }
       }
+      OnboardingInfoRow(row: OnboardingFlow.finishRow)
     }
     .onChange(of: model.shownSelfTest) {
       guard let announcement = SelfTestPresentation.announcement(for: model.shownSelfTest) else { return }

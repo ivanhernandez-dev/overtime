@@ -278,7 +278,7 @@ struct OnboardingWindowTests {
     fixture.model.performDefault()
     #expect(fixture.model.currentStep == .selfTest)
     #expect(fixture.model.progressLabel == "Step 7 of 7")
-    #expect(fixture.model.progressAccessibilityLabel == "Step 7 of 7, Test keep-awake")
+    #expect(fixture.model.progressAccessibilityLabel == "Step 7 of 7, Setup complete")
     #expect(await fixture.requested(1))
     #expect(fixture.model.startSelfTestIfDue() == nil)
     #expect(!fixture.model.canStartSelfTest)
@@ -432,7 +432,14 @@ struct OnboardingWindowTests {
     #expect(fixture.host.selfTestRequests == 0)
   }
 
-  @Test func theStepShowsTheStoredRecordsBuildChangeWhenItAppears() throws {
+  static let runsOnItsOwn = SelfTestRow(
+    icon: .symbol("info.circle"), tone: .secondary, title: "Runs on its own",
+    caption:
+      "It runs each time Overtime starts, once the lid is open and Claude isn't working. The result appears under Self-test in Settings > Diagnostics."
+  )
+  static let failedNote = "You can still finish setup. Overtime shows an error in the menu bar until the check passes."
+
+  @Test func theStepReloadsTheStoredRecordAndSaysTheTestRunsOnItsOwn() throws {
     let fixture = try Fixture()
     let record = SelfTestRecord(
       outcome: .passed, reason: nil, at: Self.startedAt.addingTimeInterval(-86_400), osBuild: "99Z998",
@@ -443,11 +450,8 @@ struct OnboardingWindowTests {
     try AppPreferencesStore.update(at: fixture.model.preferencesFile) { $0.selfTest = record }
     fixture.walk(to: .selfTest)
     #expect(fixture.model.selfTestRecord == record)
-    #expect(
-      fixture.model.selfTestRow
-        == SelfTestRow(
-          icon: .symbol("clock"), tone: .secondary, title: "Waiting to run",
-          caption: "macOS changed to 99Z999. The test runs again when the lid is open and Claude isn't working."))
+    #expect(fixture.model.shownSelfTest == .waiting)
+    #expect(fixture.model.selfTestRow == Self.runsOnItsOwn)
   }
 
   @Test func theCloseGateAsksBeforeClosingAndReportsAClosedWindow() {
@@ -561,10 +565,6 @@ struct OnboardingWindowTests {
     #expect(calls.names == ["close"])
     fixture.walk(to: .selfTest)
     #expect(await fixture.requested(1))
-    fixture.panel.apply(Self.idle(.running))
-    fixture.model.performDefault()
-    fixture.model.finish()
-    #expect(calls.names == ["close"])
     fixture.panel.apply(Self.idle(.passed, runs: 1))
     #expect(fixture.model.defaultButton == OnboardingButton(title: OnboardingFlow.finishLabel, action: .finish))
     fixture.model.performDefault()
@@ -590,7 +590,7 @@ struct OnboardingWindowTests {
     #expect(dismissedCalls.names == [])
   }
 
-  @Test func finishSetupIsOffOnlyWhileTheTestRuns() async throws {
+  @Test func finishSetupFinishesWhileTheTestRuns() async throws {
     let fixture = try Fixture()
     fixture.panel.apply(Self.idle())
     fixture.model.begin()
@@ -599,20 +599,17 @@ struct OnboardingWindowTests {
     fixture.panel.apply(Self.idle(.running))
     #expect(fixture.model.shownSelfTest == .running)
     #expect(fixture.model.selfTestRow == SelfTestRow(icon: .progress, tone: .secondary, title: "Running…"))
-    #expect(fixture.model.defaultButton == OnboardingButton(title: "Finish Setup", action: .finish, enabled: false))
+    #expect(fixture.model.defaultButton == OnboardingButton(title: "Finish Setup", action: .finish))
     #expect(!fixture.model.backEnabled)
-    fixture.model.performDefault()
-    fixture.model.finish()
     fixture.model.back()
-    #expect(fixture.model.isActive)
     #expect(fixture.model.currentStep == .selfTest)
-    #expect(fixture.stored.onboarding == nil)
-    #expect(fixture.closes.count == 0)
-    fixture.panel.apply(Self.idle(.passed, runs: 1))
-    #expect(fixture.model.selfTestRow.title == "Passed")
-    #expect(fixture.model.defaultButton.enabled)
-    #expect(fixture.model.backEnabled)
-    #expect(fixture.model.selfTestNote == nil)
+    fixture.model.performDefault()
+    #expect(fixture.stored.onboarding?.outcome == .completed)
+    #expect(fixture.stored.onboarding?.steps["selfTest"] == "done")
+    #expect(fixture.closes.count == 1)
+    #expect(!fixture.model.isActive)
+    try? await Task.sleep(for: .milliseconds(50))
+    #expect(fixture.host.selfTestRequests == 1)
   }
 
   @Test func aFailedSelfTestShowsItsReasonAndSaysSetupCanStillBeFinished() async throws {
@@ -631,7 +628,7 @@ struct OnboardingWindowTests {
         == SelfTestRow(
           icon: .symbol("xmark.circle.fill"), tone: .error, title: "Failed",
           caption: "macOS refused the lid-close control (error 0xE00002C2)."))
-    #expect(fixture.model.selfTestNote == "You can finish setup. Overtime shows an error until the test passes.")
+    #expect(fixture.model.selfTestNote == Self.failedNote)
     #expect(fixture.model.defaultButton == OnboardingButton(title: "Finish Setup", action: .finish))
     fixture.model.performDefault()
     #expect(fixture.stored.onboarding?.outcome == .completed)
@@ -654,34 +651,51 @@ struct OnboardingWindowTests {
     #expect(fixture.model.defaultButton.enabled)
   }
 
-  @Test func whenTheTestCannotRunTheStepShowsWaitingToRunAndAsksOnlyOnceItCan() async throws {
+  @Test func whenTheTestHasNotRunTheStepSaysItRunsOnItsOwnAndAsksOnlyOnceItCan() async throws {
     let fixture = try Fixture()
-    fixture.panel.apply(Self.idle(.passed, runs: 2, lidClosed: true))
+    fixture.panel.apply(Self.idle(.notRun, lidClosed: true))
     fixture.model.begin()
     fixture.walk(to: .selfTest)
     #expect(!fixture.model.canStartSelfTest)
     #expect(fixture.model.startSelfTestIfDue() == nil)
-    #expect(
-      fixture.model.selfTestRow
-        == SelfTestRow(
-          icon: .symbol("clock"), tone: .secondary, title: "Waiting to run",
-          caption: "It runs when the lid is open and Claude isn't working."))
+    #expect(fixture.model.selfTestRow == Self.runsOnItsOwn)
     #expect(fixture.model.defaultButton == OnboardingButton(title: "Finish Setup", action: .finish))
     #expect(fixture.model.backEnabled)
-    fixture.panel.apply(Self.idle(.passed, runs: 2, wanted: true))
+    fixture.panel.apply(Self.idle(.notRun, wanted: true))
     #expect(!fixture.model.canStartSelfTest)
     try? await Task.sleep(for: .milliseconds(50))
     #expect(fixture.host.selfTestRequests == 0)
-    fixture.panel.apply(Self.idle(.passed, runs: 2))
+    fixture.panel.apply(Self.idle(.notRun))
     #expect(fixture.model.canStartSelfTest)
-    #expect(fixture.model.selfTestRow.title == "Waiting to run")
+    #expect(fixture.model.selfTestRow.title == "Runs on its own")
     #expect(fixture.model.startSelfTestIfDue() != nil)
     #expect(fixture.model.selfTestRow.title == "Running…")
     #expect(await fixture.requested(1))
-    #expect(fixture.model.selfTestRow.title == "Waiting to run")
-    fixture.panel.apply(Self.idle(.passed, runs: 3))
+    #expect(fixture.model.selfTestRow.title == "Runs on its own")
+    fixture.panel.apply(Self.idle(.passed, runs: 1))
     #expect(fixture.model.selfTestRow.title == "Passed")
     #expect(fixture.host.selfTestRequests == 1)
+  }
+
+  @Test func aResultFromEarlierInThisLaunchShowsOnTheLastStep() async throws {
+    let fixture = try Fixture()
+    let record = SelfTestRecord(
+      outcome: .passed, reason: nil, at: Self.startedAt.addingTimeInterval(-600), osBuild: "99Z999",
+      osVersion: "99.9")
+    try AppPreferencesStore.update(at: fixture.model.preferencesFile) { $0.selfTest = record }
+    fixture.panel.apply(Self.idle(.passed, runs: 2, lidClosed: true))
+    fixture.model.begin()
+    fixture.walk(to: .selfTest)
+    #expect(fixture.model.selfTestRow == SelfTestPresentation.row(status: .passed, record: record, currentBuild: nil))
+    #expect(fixture.model.selfTestNote == nil)
+    try? await Task.sleep(for: .milliseconds(50))
+    #expect(fixture.host.selfTestRequests == 0)
+    fixture.panel.apply(Self.idle(.failed(.timedOut), runs: 3, lidClosed: true))
+    #expect(
+      fixture.model.selfTestRow
+        == SelfTestPresentation.row(status: .failed(.timedOut), record: record, currentBuild: nil))
+    #expect(fixture.model.selfTestRow.title == "Failed")
+    #expect(fixture.model.selfTestNote == Self.failedNote)
   }
 
   @Test func goingBackAndForwardAsksForNoSecondSelfTest() async throws {
@@ -764,8 +778,8 @@ struct OnboardingWindowTests {
     fixture.model.begin()
     fixture.walk(to: .location)
     fixture.panel.apply(Self.idle(.passed, runs: 3))
-    #expect(fixture.model.shownSelfTest == .waiting)
-    #expect(fixture.model.selfTestRow.title == "Waiting to run")
+    #expect(fixture.model.shownSelfTest == .passed)
+    #expect(fixture.model.selfTestRow.title == "Passed")
     fixture.panel.apply(Self.idle(.running, runs: 3))
     #expect(fixture.model.backEnabled)
     #expect(!fixture.model.context.actionInFlight)
@@ -779,7 +793,7 @@ struct OnboardingWindowTests {
     fixture.walk(to: .selfTest)
     #expect(!fixture.model.canStartSelfTest)
     #expect(fixture.model.startSelfTestIfDue() == nil)
-    #expect(fixture.model.selfTestRow.title == "Waiting to run")
+    #expect(fixture.model.selfTestRow.title == "Runs on its own")
     #expect(fixture.model.defaultButton.enabled)
     fixture.model.performDefault()
     #expect(fixture.stored.onboarding?.outcome == .completed)
@@ -829,6 +843,12 @@ struct OnboardingWindowTests {
     let listed = Set(SymbolAvailabilityTests.phaseThreeSymbols)
     #expect(Set(OnboardingStep.allCases.map(\.symbol)).isSubset(of: listed))
     #expect(Set(OnboardingFlow.welcomeRows.map(\.symbol)).isSubset(of: listed))
+  }
+
+  @MainActor @Test func theLastStepShowsWhereOvertimeLivesWithASymbolThatFitsTheIconColumn() throws {
+    let width = try #require(SymbolAvailabilityTests.bodySizeWidth(of: OnboardingFlow.finishRow.symbol))
+    #expect(width > 0)
+    #expect(width <= StatusRowLayout.iconWidth)
   }
 
   @Test func theAllowNotificationsLabelIsTheGeneralPanesLabel() {
@@ -951,7 +971,7 @@ struct OnboardingWindowTests {
     #expect(!fixture.presenter.armed)
     #expect(fixture.presented.count == 0)
     fixture.onboarding.login.status = .enabled
-    fixture.onboarding.panel.apply(Self.idle(.passed, runs: 6))
+    fixture.onboarding.panel.apply(Self.idle())
     fixture.settings.runOnboardingAgain()
     #expect(fixture.presented.count == 1)
     #expect(model.isActive)
@@ -967,7 +987,7 @@ struct OnboardingWindowTests {
     #expect(fixture.onboarding.login.calls.isEmpty)
     fixture.onboarding.walk(to: .selfTest)
     #expect(await fixture.onboarding.requested(1))
-    #expect(model.selfTestRow.title == "Waiting to run")
+    #expect(model.selfTestRow.title == "Runs on its own")
     fixture.onboarding.panel.apply(Self.idle(.passed, runs: 7))
     #expect(model.selfTestRow.title == "Passed")
     fixture.onboarding.clock.advance(seconds: 10)
@@ -982,7 +1002,7 @@ struct OnboardingWindowTests {
     #expect(model.results.isEmpty)
     fixture.onboarding.walk(to: .selfTest)
     #expect(await fixture.onboarding.requested(2))
-    #expect(model.selfTestRow.title == "Waiting to run")
+    #expect(model.selfTestRow.title == "Passed")
     fixture.onboarding.clock.advance(seconds: 10)
     fixture.presenter.controller.didClose()
     #expect(fixture.onboarding.stored.onboarding?.outcome == .dismissed)
@@ -2556,7 +2576,7 @@ struct OnboardingWindowTests {
     let fixture = try Fixture()
     let titles = [
       "Welcome to Overtime", "Start at login", "Notifications", "Location (optional)", "Check your setup",
-      "Unplug protection (optional)", "Test keep-awake",
+      "Unplug protection (optional)", "Setup complete",
     ]
     fixture.model.begin()
     var spoken = [fixture.model.progressAccessibilityLabel]

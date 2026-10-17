@@ -39,13 +39,16 @@ struct OnboardingFlowTests {
         "With the lid closed, macOS can still sleep when you unplug the charger or a display, even while Claude works. Unplug protection prevents this with a small helper that runs as an administrator."
     ),
     StepCopy(
-      step: .selfTest, title: "Test keep-awake", symbol: "checkmark.seal",
+      step: .selfTest, title: "Setup complete", symbol: "checkmark.seal",
       body:
-        "Overtime briefly turns its lid-close control on and off to check that it works on this Mac. The display and the Mac are not affected. Overtime lives in the menu bar. Finish Setup opens it."
+        "There's nothing left to do. Overtime checks on its own that it can keep this Mac awake, and the check doesn't affect the display."
     ),
   ]
-  static let selfTestSentence =
-    "Overtime briefly turns its lid-close control on and off to check that it works on this Mac. The display and the Mac are not affected."
+  static let removedControlPhrase = "lid-close control"
+  static let waitingCaption =
+    "It runs each time Overtime starts, once the lid is open and Claude isn't working. The result appears under Self-test in Settings > Diagnostics."
+  static let ranAt = Date(timeIntervalSince1970: 1_800_000_000)
+  static let record = SelfTestRecord(outcome: .passed, reason: nil, at: ranAt, osBuild: "26A428", osVersion: "27.0")
 
   static let seven: [OnboardingStep] = [
     .welcome, .launchAtLogin, .notifications, .location, .checks, .unplugProtection, .selfTest,
@@ -115,17 +118,62 @@ struct OnboardingFlowTests {
     #expect(OnboardingFlow.allowLocationLabel == "Allow Location Access")
     #expect(OnboardingFlow.installHelperLabel == "Install Unplug Protection…")
     #expect(
-      OnboardingFlow.selfTestFailedCaption == "You can finish setup. Overtime shows an error until the test passes.")
+      OnboardingFlow.selfTestFailedCaption
+        == "You can still finish setup. Overtime shows an error in the menu bar until the check passes.")
   }
 
   @Test func theLastStepSaysWhereOvertimeLives() {
-    #expect(OnboardingFlow.finishHint == "Overtime lives in the menu bar. Finish Setup opens it.")
+    #expect(OnboardingFlow.finishHint == "Overtime lives in the menu bar. Finish Setup opens its panel.")
     #expect(OnboardingFlow.finishHint.contains(OnboardingFlow.finishLabel))
-    #expect(OnboardingStep.selfTest.body == Self.selfTestSentence + " " + OnboardingFlow.finishHint)
-    #expect(OnboardingStep.allCases.last == .selfTest)
-    for step in OnboardingStep.allCases where step != .selfTest {
+    #expect(OnboardingFlow.finishRow.symbol == "menubar.rectangle")
+    #expect(OnboardingFlow.finishRow.text == OnboardingFlow.finishHint)
+    for step in OnboardingStep.allCases {
       #expect(!step.body.contains("menu bar"), "\(step)")
     }
+    #expect(OnboardingStep.allCases.last == .selfTest)
+  }
+
+  static let waitingRecords: [(SelfTestRecord?, String?)] = [
+    (nil, nil),
+    (record, "26A428"),
+    (record, "26A430"),
+    (record, nil),
+  ]
+
+  @Test func theLastStepSaysAWaitingTestRunsOnItsOwn() {
+    #expect(OnboardingFlow.selfTestWaitingSymbol == "info.circle")
+    #expect(OnboardingFlow.selfTestWaitingTitle == "Runs on its own")
+    #expect(OnboardingFlow.selfTestWaitingCaption == Self.waitingCaption)
+    let expected = SelfTestRow(
+      icon: .symbol("info.circle"), tone: .secondary, title: "Runs on its own", caption: Self.waitingCaption)
+    for (record, build) in Self.waitingRecords {
+      let row = OnboardingFlow.selfTestRow(status: .waiting, record: record, currentBuild: build)
+      #expect(row == expected, "\(String(describing: record)) \(String(describing: build))")
+      #expect(
+        row != SelfTestPresentation.row(status: .waiting, record: record, currentBuild: build),
+        "\(String(describing: build))")
+    }
+  }
+
+  static let otherStatuses: [SelfTestStatus] = [
+    .notRun, .running, .passed, .failed(.timedOut), .skipped(.sleepDisabled),
+  ]
+
+  @Test(arguments: otherStatuses)
+  func theLastStepShowsEveryOtherStatusAsSettingsDoes(_ status: SelfTestStatus) {
+    for record in [nil, Self.record] {
+      #expect(
+        OnboardingFlow.selfTestRow(status: status, record: record, currentBuild: "26A428")
+          == SelfTestPresentation.row(status: status, record: record, currentBuild: "26A428"))
+    }
+  }
+
+  @Test func theLastStepBodyNamesNoInternalControl() {
+    let body = OnboardingStep.selfTest.body
+    #expect(body.hasPrefix("There's nothing left to do."))
+    #expect(!body.contains(Self.removedControlPhrase))
+    #expect(!body.contains("self-test"))
+    #expect(!body.contains("Self-test"))
   }
 
   @Test func theStepLabelsEqualTheLabelsOfTheSurfacesTheyComeFrom() {
@@ -256,11 +304,11 @@ struct OnboardingFlowTests {
   ]
 
   @Test(arguments: selfTestStatuses)
-  func finishSetupIsOffOnlyWhileTheSelfTestRuns(_ status: SelfTestStatus) {
+  func finishSetupIsOnWhateverTheCheckShows(_ status: SelfTestStatus) {
     let button = OnboardingFlow.defaultButton(step: .selfTest, context: OnboardingContext(selfTest: status))
     #expect(button.title == "Finish Setup")
     #expect(button.action == .finish)
-    #expect(button.enabled == (status != .running))
+    #expect(button.enabled)
   }
 
   @Test func backIsHiddenOnTheFirstStepOnly() {
@@ -334,57 +382,27 @@ struct OnboardingFlowTests {
   }
 
   struct ShownCase: Sendable {
-    let name: String
     let status: SelfTestStatus
-    let runs: UInt64
     let requesting: Bool
-    let requested: Bool
     let shown: SelfTestStatus
   }
 
   static let shownCases = [
-    ShownCase(
-      name: "nothing asked yet", status: .notRun, runs: 3, requesting: false, requested: false, shown: .waiting),
-    ShownCase(
-      name: "an older pass, nothing asked", status: .passed, runs: 3, requesting: false, requested: false,
-      shown: .waiting),
-    ShownCase(
-      name: "an older failure, nothing asked", status: .failed(.timedOut), runs: 3, requesting: false, requested: false,
-      shown: .waiting),
-    ShownCase(
-      name: "an older skip, nothing asked", status: .skipped(.sleepDisabled), runs: 3, requesting: false,
-      requested: false, shown: .waiting),
-    ShownCase(
-      name: "the request is on its way", status: .passed, runs: 3, requesting: true, requested: true, shown: .running),
-    ShownCase(
-      name: "the engine runs it", status: .running, runs: 3, requesting: false, requested: true, shown: .running),
-    ShownCase(
-      name: "the engine runs one the step did not ask for", status: .running, runs: 3, requesting: false,
-      requested: false, shown: .running),
-    ShownCase(
-      name: "a pass after the step appeared", status: .passed, runs: 4, requesting: false, requested: true,
-      shown: .passed),
-    ShownCase(
-      name: "a failure after the step appeared", status: .failed(.watchdogNotRunning), runs: 4, requesting: false,
-      requested: true, shown: .failed(.watchdogNotRunning)),
-    ShownCase(
-      name: "a run the step did not ask for finished", status: .passed, runs: 4, requesting: false, requested: false,
-      shown: .passed),
-    ShownCase(
-      name: "the request was answered with a skip", status: .skipped(.sleepDisabled), runs: 3, requesting: false,
-      requested: true, shown: .skipped(.sleepDisabled)),
-    ShownCase(
-      name: "an older pass still in the snapshot after the request", status: .passed, runs: 3, requesting: false,
-      requested: true, shown: .waiting),
-    ShownCase(name: "the engine waits", status: .waiting, runs: 3, requesting: false, requested: true, shown: .waiting),
+    ShownCase(status: .notRun, requesting: false, shown: .waiting),
+    ShownCase(status: .waiting, requesting: false, shown: .waiting),
+    ShownCase(status: .running, requesting: false, shown: .running),
+    ShownCase(status: .passed, requesting: true, shown: .running),
+    ShownCase(status: .notRun, requesting: true, shown: .running),
+    ShownCase(status: .passed, requesting: false, shown: .passed),
+    ShownCase(status: .failed(.watchdogNotRunning), requesting: false, shown: .failed(.watchdogNotRunning)),
+    ShownCase(status: .skipped(.sleepDisabled), requesting: false, shown: .skipped(.sleepDisabled)),
   ]
 
   @Test(arguments: shownCases)
-  func theSelfTestStepShowsOnlyAResultFromAfterItAppeared(_ item: ShownCase) {
+  func theLastStepShowsTheLatestResultOfThisLaunch(_ item: ShownCase) {
     #expect(
-      OnboardingFlow.shownSelfTest(
-        status: item.status, runs: item.runs, runsAtEntry: 3, requesting: item.requesting, requested: item.requested)
-        == item.shown, "\(item.name)")
+      OnboardingFlow.shownSelfTest(status: item.status, requesting: item.requesting) == item.shown,
+      "\(item.status) \(item.requesting)")
   }
 
   @Test func withNoRecordOnboardingOpens() throws {

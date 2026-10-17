@@ -1246,6 +1246,23 @@ struct AppViewSourceGuardTests {
     #expect(Self.welcomeIconFindings(in: window.text) == [])
   }
 
+  @Test func theLastStepShowsWhereOvertimeLivesBelowItsTestRow() throws {
+    let steps = try #require(try Self.appSourceFiles().first { $0.name == "OnboardingSteps.swift" })
+    let text = steps.text.filter { !$0.isWhitespace }
+    let start = try #require(text.range(of: "structOnboardingSelfTestStep:View{"))
+    let rest = text[start.upperBound...]
+    let end = rest.range(of: "struct")?.lowerBound ?? rest.endIndex
+    let step = String(rest[..<end])
+    let testRow = "SelfTestRowView(row:model.selfTestRow)"
+    let finishRow = "OnboardingInfoRow(row:OnboardingFlow.finishRow)"
+    #expect(step.components(separatedBy: testRow).count - 1 == 1)
+    #expect(step.components(separatedBy: finishRow).count - 1 == 1)
+    let shownTest = try #require(step.range(of: testRow))
+    let shownFinish = try #require(step.range(of: finishRow))
+    #expect(shownTest.upperBound <= shownFinish.lowerBound)
+    #expect(text.components(separatedBy: "OnboardingInfoRows(rows:OnboardingFlow.welcomeRows)").count - 1 == 1)
+  }
+
   static let plantedStepIcon = [
     "struct OnboardingStepIcon: View {",
     "  static let side: CGFloat = 48",
