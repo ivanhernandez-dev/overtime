@@ -7,7 +7,8 @@ public enum Reducer {
   public static func reduce(_ state: inout AppState, _ event: Stamped<Event>, _ settings: Settings) -> [Effect] {
     let before = state
     var effects = reduceEvent(&state, event, settings)
-    EventCounters.observe(&state, before: before, event: event.event, effects: effects, now: event.mono)
+    EventCounters.observe(
+      &state, before: before, event: event.event, effects: effects, now: event.mono, settings: settings)
     let derived = persistedState(state)
     if derived != state.persisted {
       state.persisted = derived
@@ -32,8 +33,9 @@ public enum Reducer {
   static func lidPipeline(
     _ state: inout AppState, event: Event, now: Instant, prior: [Effect], settings: Settings
   ) -> [Effect] {
-    let lid = LidDisplay.step(&state, event: event, now: now)
-    let verification = SleepVerification.step(&state, event: event, now: now, holdEffects: prior)
+    let lid = LidDisplay.step(&state, event: event, now: now, settings: settings)
+    let verification = SleepVerification.step(
+      &state, event: event, now: now, holdEffects: prior, settings: settings)
     return lid + verification + NetworkFailover.step(&state, event: event, now: now, settings: settings)
   }
 
@@ -277,7 +279,7 @@ public enum Reducer {
     }
     candidates += state.hold.retryDeadlines
     candidates += LidCloseHold.deadlines(state.hold)
-    candidates += LidDisplay.deadlines(state)
+    candidates += LidDisplay.deadlines(state, settings: settings)
     candidates += SleepVerification.deadlines(state)
     candidates += NetworkFailover.deadlines(state, settings)
     candidates += HelperIntent.deadlines(state)

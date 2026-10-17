@@ -355,7 +355,9 @@ public enum NetworkFailover {
   }
 
   static func probing(_ state: AppState, settings: Settings) -> Bool {
-    guard state.want.wanted == true, state.lid.closed == true else { return false }
+    guard state.want.wanted == true, state.lid.closed == true, Hold.lidClosedAllowed(state, settings: settings) else {
+      return false
+    }
     switch readiness(state, settings: settings) {
     case .armed, .off(.wifiOff): return true
     case .off, nil: return false

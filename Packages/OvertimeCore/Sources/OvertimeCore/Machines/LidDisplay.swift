@@ -20,13 +20,15 @@ public struct LidState: Sendable, Equatable {
 }
 
 public enum LidDisplay {
-  public static func gateOn(_ state: AppState) -> Bool {
-    state.want.wanted == true || state.persisted.ownsHold || state.persisted.switchedToHotspot
+  public static func gateOn(_ state: AppState, settings: Settings = Settings()) -> Bool {
+    Hold.lidCloseDesired(state, settings: settings) || state.persisted.ownsHold || state.persisted.switchedToHotspot
       || state.persisted.hotspotJoinStarted
   }
 
-  public static func step(_ state: inout AppState, event: Event, now: Instant) -> [Effect] {
-    guard gateOn(state) else {
+  public static func step(
+    _ state: inout AppState, event: Event, now: Instant, settings: Settings = Settings()
+  ) -> [Effect] {
+    guard gateOn(state, settings: settings) else {
       state.lid = LidState()
       return []
     }
@@ -35,8 +37,8 @@ public enum LidDisplay {
     return effects + closedTick(&state, facts: facts, now: now)
   }
 
-  public static func deadlines(_ state: AppState) -> [Instant] {
-    guard gateOn(state), state.lid.closed == true else { return [] }
+  public static func deadlines(_ state: AppState, settings: Settings = Settings()) -> [Instant] {
+    guard gateOn(state, settings: settings), state.lid.closed == true else { return [] }
     var deadlines = state.lid.nextDisplayCheck.map { [$0] } ?? []
     if state.lid.externalDisplays == 0, let resleep = state.lid.nextResleep {
       deadlines.append(resleep)

@@ -45,7 +45,10 @@ public struct EventCounters: Sendable, Equatable {
     self.temperatureReleases = temperatureReleases
   }
 
-  public static func observe(_ state: inout AppState, before: AppState, event: Event, effects: [Effect], now: Instant) {
+  public static func observe(
+    _ state: inout AppState, before: AppState, event: Event, effects: [Effect], now: Instant,
+    settings: Settings = Settings()
+  ) {
     var counters = state.events
     if !before.hold.errorActive && state.hold.errorActive {
       bump(&counters.holdErrorEpisodes)
@@ -79,7 +82,7 @@ public struct EventCounters: Sendable, Equatable {
       counters.sleepRequested = false
       counters.sleepRequest = nil
     case .systemWillSleep:
-      if before.want.wanted == true && !counters.sleepRequested {
+      if before.want.wanted == true && Hold.lidClosedAllowed(before, settings: settings) && !counters.sleepRequested {
         bump(&counters.unexpectedSleeps)
       }
     case .effectResult(let id, let outcome) where id == counters.sleepRequest:
