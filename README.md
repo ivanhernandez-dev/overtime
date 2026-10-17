@@ -123,7 +123,7 @@ Settings has seven panes, in this order:
 
 - **General:** Launch at login, the display and notifications.
 - **Detection:** How Overtime tells that Claude is working.
-- **Battery:** When Overtime lets the Mac sleep to protect the battery.
+- **Battery:** When Overtime lets the Mac sleep to protect the battery, by charge and by temperature, and the Unplug Protection floor.
 - **Network:** Switching to your iPhone hotspot when the network fails.
 - **Unplug Protection:** Keeps the lid-closed Mac awake when you unplug power or a display.
 - **Diagnostics:** Detection health, the self-test and an export for bug reports.
@@ -178,7 +178,7 @@ Overtime collects no telemetry.
 
 - the list of your own running processes, to spot Claude Code sessions;
 - when the transcripts in its folders were last written, and the first 64 KB of each transcript, only to read which kind of client wrote it;
-- the power state: lid, battery, charger, displays and idle time;
+- the power state: lid, battery charge and temperature, charger, displays and idle time;
 - for network failover only: the Wi-Fi interface, the router address and your known networks, and, with Location allowed, a scan for nearby networks with your hotspot's name.
 
 **What it sends:** two kinds of requests, and nothing about you or your work.
@@ -206,7 +206,7 @@ When an update is waiting, a quiet reminder appears in the panel and in Settings
 <details>
 <summary>The helper and modified copies</summary>
 
-- **If you use Unplug Protection.** The helper accepts only an app signed with Overtime's certificate, but it checks the app's main program only. Because of the exception above, a modified copy of the app with an added library could ask the helper to keep sleep off. The helper's own limits still apply (lid open, 10% battery, low-battery warning, heat, an unreadable power state), but nothing else would end it. This risk ends with the first Developer ID release.
+- **If you use Unplug Protection.** The helper accepts only an app signed with Overtime's certificate, but it checks the app's main program only. Because of the exception above, a modified copy of the app with an added library could ask the helper to keep sleep off. The helper's own limits still apply (lid open, its battery floor, a low-battery warning, heat, an unreadable power state), but nothing else would end it. This risk ends with the first Developer ID release.
 - **Check a download.** Each release has a `SHA256SUMS` file. Put it in the same folder as your download and run `shasum -a 256 -c --ignore-missing SHA256SUMS`; each file you downloaded should read `OK`. To check the installed app's signature, run `codesign -d -r- /Applications/Overtime.app`; the output names the certificate root `9c54a8e3e576cc8e7eb6d5a2dc63aa7607b821ce`.
 
 </details>
@@ -224,7 +224,7 @@ When an update is waiting, a quiet reminder appears in the panel and in Settings
 <details>
 <summary>The Mac slept with the lid closed while Claude was working</summary>
 
-Without Unplug Protection, a closed Mac can sleep when you plug the charger back in, connect or disconnect an external display, or unplug the charger while an external display is connected. The battery limit in Settings > Battery also lets go on purpose. The Lid-closed summary notification tells you what happened, and the decision log is `~/Library/Logs/Overtime/overtimed.log`.
+Without Unplug Protection, a closed Mac can sleep when you plug the charger back in, connect or disconnect an external display, or unplug the charger while an external display is connected. The battery limit in Settings > Battery also lets go on purpose, and so does the temperature limit once temperature protection is on. The Lid-closed summary notification tells you what happened, and the decision log is `~/Library/Logs/Overtime/overtimed.log`.
 
 </details>
 
@@ -245,7 +245,7 @@ On macOS 26 or later, open System Settings > Menu Bar and allow Overtime. Openin
 <details>
 <summary>Can I use it with another keep-awake tool?</summary>
 
-Overtime warns when it finds another tool that also manages sleep, with a message that ends "Running both is unsupported." A lid-closed mode of another tool uses the same macOS setting as Overtime, so quit that tool while Overtime runs.
+Overtime warns when it finds another tool that also manages sleep, with a message that ends "Running both is unsupported." A lid-closed mode of another tool uses the same macOS setting as Overtime, so quit that tool while Overtime runs. Claude Code's own `caffeinate`, and the ones its commands start, don't count as another tool.
 
 </details>
 
