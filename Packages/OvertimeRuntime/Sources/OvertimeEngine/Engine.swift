@@ -702,11 +702,12 @@ public actor Engine {
       Decision(
         keyword: .settings, verb: "applied", fields: [DecisionField(key: "keys", value: keys.joined(separator: ","))])
     )
-    let thresholdsChanged =
+    let powerRulesChanged =
       old.batteryLowPercent != new.batteryLowPercent || old.batteryResumePercent != new.batteryResumePercent
       || old.batteryProtectionEnabled != new.batteryProtectionEnabled
       || old.helperBatteryFloorPercent != new.helperBatteryFloorPercent
-    if thresholdsChanged, let lastPower {
+      || old.lidClosedKeepAwake != new.lidClosedKeepAwake
+    if powerRulesChanged, let lastPower {
       await step(.power(lastPower))
     }
     let temperatureChanged =
@@ -739,6 +740,11 @@ public actor Engine {
       keys.append("temperatureProtectionEnabled")
     }
     if old.temperatureReleaseCelsius != new.temperatureReleaseCelsius { keys.append("temperatureReleaseCelsius") }
+    if old.lidClosedKeepAwake != new.lidClosedKeepAwake { keys.append("lidClosedKeepAwake") }
+    if old.pauseFirstMinutes != new.pauseFirstMinutes { keys.append("pauseFirstMinutes") }
+    if old.pauseSecondMinutes != new.pauseSecondMinutes { keys.append("pauseSecondMinutes") }
+    if old.keepAwakeFirstMinutes != new.keepAwakeFirstMinutes { keys.append("keepAwakeFirstMinutes") }
+    if old.keepAwakeSecondMinutes != new.keepAwakeSecondMinutes { keys.append("keepAwakeSecondMinutes") }
     return keys.sorted()
   }
 

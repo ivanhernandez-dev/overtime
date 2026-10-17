@@ -128,6 +128,12 @@ public struct EngineSnapshot: Sendable, Equatable {
   public var temperatureProtectionEnabled: Bool
   public var temperatureReleaseCelsius: Int
   public var temperatureResumeCelsius: Int
+  public var lidClosedKeepAwake: LidClosedKeepAwake
+  public var lidClosedHoldAllowed: Bool
+  public var pauseFirstMinutes: Int
+  public var pauseSecondMinutes: Int
+  public var keepAwakeFirstMinutes: Int
+  public var keepAwakeSecondMinutes: Int
 
   public var busyEndedAt: Instant? {
     events.busyEndedAt
@@ -171,8 +177,20 @@ public struct EngineSnapshot: Sendable, Equatable {
     batteryTemperature: BatteryTemperatureReading? = nil,
     temperatureProtectionEnabled: Bool = Settings().temperatureProtectionEnabled,
     temperatureReleaseCelsius: Int = Settings().temperatureReleaseCelsius,
-    temperatureResumeCelsius: Int = Settings().temperatureResumeCelsius
+    temperatureResumeCelsius: Int = Settings().temperatureResumeCelsius,
+    lidClosedKeepAwake: LidClosedKeepAwake = Settings().lidClosedKeepAwake,
+    lidClosedHoldAllowed: Bool = true,
+    pauseFirstMinutes: Int = Settings().pauseFirstMinutes,
+    pauseSecondMinutes: Int = Settings().pauseSecondMinutes,
+    keepAwakeFirstMinutes: Int = Settings().keepAwakeFirstMinutes,
+    keepAwakeSecondMinutes: Int = Settings().keepAwakeSecondMinutes
   ) {
+    self.lidClosedKeepAwake = lidClosedKeepAwake
+    self.lidClosedHoldAllowed = lidClosedHoldAllowed
+    self.pauseFirstMinutes = pauseFirstMinutes
+    self.pauseSecondMinutes = pauseSecondMinutes
+    self.keepAwakeFirstMinutes = keepAwakeFirstMinutes
+    self.keepAwakeSecondMinutes = keepAwakeSecondMinutes
     self.batteryProtectionEnabled = batteryProtectionEnabled
     self.helperBatteryFloorPercent = helperBatteryFloorPercent
     self.temperatureBlocked = temperatureBlocked
@@ -256,7 +274,13 @@ public struct EngineSnapshot: Sendable, Equatable {
       batteryTemperature: state.temperature.reading,
       temperatureProtectionEnabled: settings.temperatureProtectionEnabled,
       temperatureReleaseCelsius: settings.temperatureReleaseCelsius,
-      temperatureResumeCelsius: settings.temperatureResumeCelsius
+      temperatureResumeCelsius: settings.temperatureResumeCelsius,
+      lidClosedKeepAwake: settings.lidClosedKeepAwake,
+      lidClosedHoldAllowed: Hold.lidClosedAllowed(state, settings: settings),
+      pauseFirstMinutes: settings.pauseFirstMinutes,
+      pauseSecondMinutes: settings.pauseSecondMinutes,
+      keepAwakeFirstMinutes: settings.keepAwakeFirstMinutes,
+      keepAwakeSecondMinutes: settings.keepAwakeSecondMinutes
     )
   }
 
