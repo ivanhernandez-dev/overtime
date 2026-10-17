@@ -134,7 +134,7 @@ Settings has seven panes, in this order:
 - **About:** Version, updates, acknowledgements and uninstall.
 
 <p align="center">
-  <img src="docs/images/settings-general-dark.png" width="780" alt="Overtime Settings on the General pane, selected in the sidebar, with Launch at login on and the notification switches">
+  <img src="docs/images/settings-general-dark.png" width="780" alt="Overtime Settings on the General pane, selected in the sidebar, with Launch at login on, Keep awake with the lid closed set to Always, Keep display on while Claude works off, and the Pause and Keep Awake section with the Pause choices at 15 and 60 minutes">
 </p>
 
 ## How it works
