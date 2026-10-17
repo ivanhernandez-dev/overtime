@@ -153,6 +153,8 @@ public enum DiagnosticsManifest {
     var temperatureReleaseCelsius: Int
     var temperatureBlocked: Bool
     var batteryTemperature: String?
+    var lidClosedKeepAwake: String
+    var lidClosedHoldAllowed: Bool
   }
 
   public static let snapshotFile = "snapshot.json"
@@ -345,7 +347,8 @@ public enum DiagnosticsManifest {
       helperBatteryFloorPercent: snapshot.helperBatteryFloorPercent,
       temperatureProtectionEnabled: snapshot.temperatureProtectionEnabled,
       temperatureReleaseCelsius: snapshot.temperatureReleaseCelsius, temperatureBlocked: snapshot.temperatureBlocked,
-      batteryTemperature: snapshot.batteryTemperature.map(export))
+      batteryTemperature: snapshot.batteryTemperature.map(export),
+      lidClosedKeepAwake: snapshot.lidClosedKeepAwake.rawValue, lidClosedHoldAllowed: snapshot.lidClosedHoldAllowed)
   }
 
   static func export(_ reading: BatteryTemperatureReading) -> String {

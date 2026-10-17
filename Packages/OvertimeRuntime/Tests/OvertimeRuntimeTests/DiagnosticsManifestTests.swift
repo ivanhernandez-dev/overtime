@@ -328,6 +328,7 @@ struct DiagnosticsManifestTests {
     FlagCase(snapshot: EngineSnapshot(temperatureBlocked: true), path: "temperatureBlocked"),
     FlagCase(snapshot: EngineSnapshot(), path: "batteryProtectionEnabled"),
     FlagCase(snapshot: EngineSnapshot(temperatureProtectionEnabled: true), path: "temperatureProtectionEnabled"),
+    FlagCase(snapshot: EngineSnapshot(lidClosedHoldAllowed: true), path: "lidClosedHoldAllowed"),
   ]
 
   static func truths(in value: Any, under prefix: String = "") -> [String] {
@@ -348,6 +349,9 @@ struct DiagnosticsManifestTests {
     }
     if item.path != "temperatureProtectionEnabled" {
       snapshot.temperatureProtectionEnabled = false
+    }
+    if item.path != "lidClosedHoldAllowed" {
+      snapshot.lidClosedHoldAllowed = false
     }
     let object = try Self.object(DiagnosticsManifest.snapshotJSON(snapshot))
     #expect(Self.truths(in: object) == [item.path])
@@ -387,6 +391,7 @@ struct DiagnosticsManifestTests {
         "wantedSince", "graceDeadline", "coexistenceWarned", "amphetamineRunning", "otherTools", "counters",
         "detectionWarnings", "selfTest", "helper", "network", "sessions", "batteryProtectionEnabled",
         "helperBatteryFloorPercent", "temperatureProtectionEnabled", "temperatureReleaseCelsius", "temperatureBlocked",
+        "lidClosedKeepAwake", "lidClosedHoldAllowed",
       ])
     for key in Self.keys(in: object).map({ $0.lowercased() }) {
       for word in ["arg", "exec", "command", "path", "transcript"] {
@@ -600,7 +605,7 @@ struct DiagnosticsManifestTests {
         "mode", "releaseUntilIdle", "batteryBlocked", "batteryLowPercent", "batteryResumePercent", "holdError",
         "coexistenceWarned", "amphetamineRunning", "otherTools", "counters", "detectionWarnings", "selfTest", "helper",
         "sessions", "batteryProtectionEnabled", "helperBatteryFloorPercent", "temperatureProtectionEnabled",
-        "temperatureReleaseCelsius", "temperatureBlocked",
+        "temperatureReleaseCelsius", "temperatureBlocked", "lidClosedKeepAwake", "lidClosedHoldAllowed",
       ])
     #expect((object["helper"] as? [String: Any])?.keys.sorted() == ["engaged"])
     #expect((object["selfTest"] as? [String: Any])?.keys.sorted() == ["errorActive", "failures", "runs", "status"])
@@ -643,6 +648,17 @@ struct DiagnosticsManifestTests {
       DiagnosticsManifest.snapshotJSON(EngineSnapshot(temperatureProtectionEnabled: false)))
     let offValue = off["temperatureProtectionEnabled"] as? Bool
     #expect(offValue == false)
+  }
+
+  @Test func theLidSettingIsExportedByName() throws {
+    let limited = try Self.object(
+      DiagnosticsManifest.snapshotJSON(
+        EngineSnapshot(power: .battery(percent: 50), lidClosedKeepAwake: .onPowerAdapter, lidClosedHoldAllowed: false)))
+    #expect(limited["lidClosedKeepAwake"] as? String == "onPowerAdapter")
+    #expect(limited["lidClosedHoldAllowed"] as? Bool == false)
+    let defaults = try Self.object(DiagnosticsManifest.snapshotJSON(EngineSnapshot()))
+    #expect(defaults["lidClosedKeepAwake"] as? String == "always")
+    #expect(defaults["lidClosedHoldAllowed"] as? Bool == true)
   }
 
   @Test func snapshotJSONIsSortedReadableAndKeepsSlashesPlain() {
