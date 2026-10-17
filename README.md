@@ -96,6 +96,10 @@ The first time Overtime opens, a short guide sets it up in seven steps: Welcome 
   <img src="docs/images/onboarding-dark.png" width="640" alt="The Overtime setup guide on its Welcome to Overtime step">
 </p>
 
+<p align="center">
+  <img src="docs/images/onboarding-complete-dark.png" width="640" alt="The Overtime setup guide on its last step, Setup complete: nothing left to do, the self-test runs on its own, and the Finish Setup button">
+</p>
+
 ## Using Overtime
 
 Click the Overtime icon in the menu bar to open the panel. At the top, a status card shows what Overtime is doing and why, and how long it has kept the Mac awake. Chips below it show the lid, battery and network state. The Claude Sessions list shows each terminal session that is working, titled by its folder and captioned "Working · " with the time it has worked, plus one quiet line for the sessions that are open but idle. Under the list are the controls.
@@ -136,6 +140,10 @@ Settings has seven panes, in this order:
 - **Watch.** A small watchdog process runs next to the app. If Overtime crashes, hangs or is killed, the watchdog restores normal sleep first and then reopens Overtime, at most 3 times in 10 minutes. A hold left behind is cleared the next time Overtime starts, and restarting the Mac clears the lid-close setting.
 - **Release.** The Mac sleeps about three minutes after Claude's last activity: the 2-minute Transcript window plus the 1-minute Release grace, both in Settings > Detection. With the lid closed and no external display, Overtime checks about 30 seconds after letting go that the Mac went to sleep, and asks for sleep if it didn't.
 - **Stay out of the way.** With the lid closed and no external display, the display turns off so the screen locks; an external display is never turned off, and you can keep the display on with "Keep display on while Claude works". On battery, Overtime lets go at 10% and holds again on power or at 20%, both in Settings > Battery, where you can also turn battery protection off. Temperature protection is off until you turn it on there; then, when the battery reaches 45°C, Overtime lets go until it cools below 40°C, and you can change that temperature. Apple menu > Sleep works as usual with the lid open, and Sleep Now and Pause in the panel always let the Mac sleep.
+
+<p align="center">
+  <img src="docs/images/settings-battery-dark.png" width="780" alt="Overtime Settings on the Battery pane, selected in the sidebar, with Battery protection on at Release at 10% and Resume at 20%, and the Temperature section with Temperature protection off, Release at 45°C and a battery temperature of 31°C">
+</p>
 
 Network failover is off until you choose your iPhone hotspot, during setup or in Settings > Network, or turn on Auto-detect iPhone hotspot. It acts only with the lid closed while Claude works. It checks every 10 seconds, asking api.anthropic.com and then captive.apple.com, with no cookies and no cache. After 3 failed checks it joins the hotspot, and it switches back to your usual network when you open the lid.
 
