@@ -64,6 +64,9 @@ public struct StatusChipSummary: Sendable, Equatable {
     if snapshot?.lidClosed == true, (snapshot?.externalDisplays ?? 0) > 0 {
       details.append(StatusDetail(kind: .lid, symbol: lid.icon, text: StatusChips.externalDisplayDetail))
     }
+    if let text = StatusChips.lidHoldOffDetail(snapshot) {
+      details.append(StatusDetail(kind: .lid, symbol: lid.icon, text: text))
+    }
     if case .battery(_?)? = snapshot?.power, snapshot?.batteryBlocked == true {
       let lowPercent = snapshot?.batteryLowPercent ?? Settings().batteryLowPercent
       details.append(StatusDetail(kind: .battery, symbol: battery.icon, text: StatusChips.belowFloorDetail(lowPercent)))
@@ -92,6 +95,22 @@ public enum StatusChips {
   public static let lidUnknown = "Lid unknown"
   public static let batteryUnknown = "Battery unknown"
   public static let externalDisplayDetail = "An external display is connected."
+  public static let lidClosedHoldOffDetail = "Closing the lid lets the Mac sleep."
+  public static let onBatteryLidDetail = "On battery, closing the lid lets the Mac sleep."
+  public static let unknownPowerLidDetail =
+    "Until Overtime can read the power source, closing the lid lets the Mac sleep."
+
+  static func lidHoldOffDetail(_ snapshot: EngineSnapshot?) -> String? {
+    guard let snapshot, snapshot.wanted == true, snapshot.lidClosed != true, !snapshot.lidClosedHoldAllowed else {
+      return nil
+    }
+    if snapshot.lidClosedKeepAwake == .never { return lidClosedHoldOffDetail }
+    switch snapshot.power {
+    case .battery?: return onBatteryLidDetail
+    case nil: return unknownPowerLidDetail
+    case .ac?, .noBattery?: return nil
+    }
+  }
 
   public static func belowFloorDetail(_ lowPercent: Int) -> String {
     "On battery, below \(lowPercent)%."

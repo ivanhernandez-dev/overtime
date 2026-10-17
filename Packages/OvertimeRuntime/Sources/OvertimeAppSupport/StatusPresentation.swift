@@ -161,7 +161,7 @@ public struct StatusPresentation: Sendable, Equatable {
     if snapshot.reason == "busy" && snapshot.busy == false {
       return .grace
     }
-    if snapshot.lidClosed == true {
+    if snapshot.lidClosed == true, snapshot.lidClosedHoldAllowed {
       return .lidClosedHolding
     }
     return .holding

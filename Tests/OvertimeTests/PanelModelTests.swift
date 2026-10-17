@@ -748,6 +748,23 @@ struct PanelModelTests {
     #expect(bound.host.requests == [.pause(.forSeconds(2700))])
   }
 
+  @Test func thePanelHidesTheUnplugHintWhileTheLidClosedHoldIsOff() async {
+    let off = Bound()
+    off.host.publish(
+      EngineSnapshot(
+        busy: true, wanted: true, reason: "busy", lidClosed: false, lidClosedKeepAwake: .never,
+        lidClosedHoldAllowed: false))
+    #expect(await waitUntil { off.model.snapshot != nil })
+    #expect(off.model.presentation.state == .holding)
+    #expect(!off.model.hints.contains { $0.action == .setUpUnplugProtection || $0.action == .reviewUnplugProtection })
+    #expect(!off.model.hints.contains { $0.priority == 5 })
+
+    let always = Bound()
+    always.host.publish(EngineSnapshot(busy: true, wanted: true, reason: "busy", lidClosed: false))
+    #expect(await waitUntil { always.model.snapshot != nil })
+    #expect(always.model.hints.contains { $0.action == .setUpUnplugProtection })
+  }
+
   @Test func withoutASnapshotThePanelMenusAreTheDefaultOnes() {
     let model = PanelModel()
     #expect(model.snapshot == nil)

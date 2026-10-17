@@ -147,7 +147,9 @@ final class PanelModel {
         amphetamineInstalled: amphetamineInstalled,
         keepAwakeWanted: Hints.keepAwakeWanted(presentation.state),
         helper: helperHint,
-        helperOwnsSleepDisabled: helperOwnsSleepDisabled))
+        helperOwnsSleepDisabled: helperOwnsSleepDisabled,
+        lidClosedKeepAwake: snapshot?.lidClosedKeepAwake ?? .always,
+        lidClosedHoldAllowed: snapshot?.lidClosedHoldAllowed ?? true))
   }
 
   var helperShown: HelperUIState? {

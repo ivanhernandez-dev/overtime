@@ -95,6 +95,24 @@ struct StatusPresentationTests {
     #expect(presentation.reason == testCase.reason)
   }
 
+  @Test func aClosedLidIsLidClosedHoldingOnlyWhileTheHoldIsAllowed() {
+    let allowed = StatusPresentation.derive(
+      snapshot: EngineSnapshot(busy: true, wanted: true, reason: "busy", lidClosed: true, lidClosedHoldAllowed: true),
+      hostFailure: nil, engineUnresponsive: false)
+    #expect(allowed.state == .lidClosedHolding)
+    let off = StatusPresentation.derive(
+      snapshot: EngineSnapshot(
+        busy: true, wanted: true, reason: "busy", lidClosed: true, lidClosedKeepAwake: .never,
+        lidClosedHoldAllowed: false),
+      hostFailure: nil, engineUnresponsive: false)
+    #expect(off.state == .holding)
+    #expect(off.glyph == .awake)
+    #expect(off.fallbackGlyph == "sun.max")
+    #expect(off.accessibilityLabel == "Overtime, keeping awake")
+    #expect(off.title == "Keeping awake")
+    #expect(off.reason == "Claude is working.")
+  }
+
   static let uninstallingInputs: [(EngineSnapshot?, HostFailure?, Bool)] = [
     (nil, nil, false),
     (EngineSnapshot(busy: true, wanted: true, reason: "busy", lidClosed: true), nil, false),

@@ -1,5 +1,6 @@
 import Foundation
 import OvertimeAppSupport
+import OvertimeCore
 import OvertimeSystem
 import Testing
 
@@ -114,6 +115,38 @@ struct HintsTests {
     #expect(Hints.rootlessLimitation == Self.rootlessCopy)
     #expect(Hints.unplugProtectionOn == Self.protectedCopy)
     #expect(Self.variants.map(\.helper) == [.notInstalled, .installedNotReady, .ready])
+  }
+
+  static let displayCopy = "With the lid closed, connecting or disconnecting a display can still let the Mac sleep."
+  static let protectedForDisplaysCopy =
+    "Unplug protection is on. Connecting or disconnecting a display with the lid closed won't let the Mac sleep."
+
+  @Test func theUnplugHintIsHiddenWhileTheLidClosedHoldIsOff() {
+    let helperStates: [HelperHintState] = [.notInstalled, .installedNotReady, .ready]
+    for setting in LidClosedKeepAwake.allCases {
+      for helper in helperStates {
+        let hints = Hints.visible(
+          HintInputs(
+            keepAwakeWanted: true, helper: helper, lidClosedKeepAwake: setting, lidClosedHoldAllowed: false))
+        #expect(!hints.contains { $0.priority == 5 }, "\(setting) \(helper)")
+      }
+    }
+  }
+
+  @Test func withOnPowerAdapterTheUnplugHintNamesOnlyTheDisplay() {
+    let cases: [(HelperHintState, String, String, HintAction?)] = [
+      (.notInstalled, "info.circle", Self.displayCopy, .setUpUnplugProtection),
+      (.installedNotReady, "info.circle", Self.displayCopy, .reviewUnplugProtection),
+      (.ready, "checkmark.shield", Self.protectedForDisplaysCopy, nil),
+    ]
+    for (helper, icon, text, action) in cases {
+      let hints = Hints.visible(
+        HintInputs(
+          keepAwakeWanted: true, helper: helper, lidClosedKeepAwake: .onPowerAdapter, lidClosedHoldAllowed: true))
+      #expect(hints == [Hint(priority: 5, icon: icon, tint: .info, text: text, action: action)])
+    }
+    #expect(Hints.displayLimitation == Self.displayCopy)
+    #expect(Hints.unplugProtectionOnForDisplays == Self.protectedForDisplaysCopy)
   }
 
   @Test(arguments: shownStates)

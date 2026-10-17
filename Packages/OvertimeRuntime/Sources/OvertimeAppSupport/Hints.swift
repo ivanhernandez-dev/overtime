@@ -1,4 +1,5 @@
 import Foundation
+import OvertimeCore
 
 public enum HelperHintState: Sendable, Equatable {
   case notInstalled
@@ -25,11 +26,14 @@ public struct HintInputs: Sendable, Equatable {
   public var keepAwakeWanted: Bool
   public var helper: HelperHintState
   public var helperOwnsSleepDisabled: Bool
+  public var lidClosedKeepAwake: LidClosedKeepAwake
+  public var lidClosedHoldAllowed: Bool
 
   public init(
     sleepDisabledLeftover: Bool = false, amphetamineRunning: Bool = false, otherTools: [String] = [],
     amphetamineInstalled: Bool = false, keepAwakeWanted: Bool = false, helper: HelperHintState = .notInstalled,
-    helperOwnsSleepDisabled: Bool = false
+    helperOwnsSleepDisabled: Bool = false, lidClosedKeepAwake: LidClosedKeepAwake = .always,
+    lidClosedHoldAllowed: Bool = true
   ) {
     self.sleepDisabledLeftover = sleepDisabledLeftover
     self.amphetamineRunning = amphetamineRunning
@@ -38,6 +42,8 @@ public struct HintInputs: Sendable, Equatable {
     self.keepAwakeWanted = keepAwakeWanted
     self.helper = helper
     self.helperOwnsSleepDisabled = helperOwnsSleepDisabled
+    self.lidClosedKeepAwake = lidClosedKeepAwake
+    self.lidClosedHoldAllowed = lidClosedHoldAllowed
   }
 }
 
@@ -85,6 +91,10 @@ public enum Hints {
     "With the lid closed, unplugging power or a display can still let the Mac sleep."
   public static let unplugProtectionOn =
     "Unplug protection is on. Unplugging power or a display with the lid closed won't let the Mac sleep."
+  public static let displayLimitation =
+    "With the lid closed, connecting or disconnecting a display can still let the Mac sleep."
+  public static let unplugProtectionOnForDisplays =
+    "Unplug protection is on. Connecting or disconnecting a display with the lid closed won't let the Mac sleep."
   static let warningIcon = "exclamationmark.triangle.fill"
   static let infoIcon = "info.circle"
   static let protectedIcon = "checkmark.shield"
@@ -116,8 +126,8 @@ public enum Hints {
           priority: 4, icon: infoIcon, tint: .info,
           text: "Amphetamine is installed. Keep it quit while Overtime runs."))
     }
-    if inputs.keepAwakeWanted {
-      hints.append(unplugProtection(inputs.helper))
+    if inputs.keepAwakeWanted && inputs.lidClosedHoldAllowed {
+      hints.append(unplugProtection(inputs.helper, displaysOnly: inputs.lidClosedKeepAwake == .onPowerAdapter))
     }
     return Array(hints.prefix(maxVisible))
   }
@@ -128,14 +138,17 @@ public enum Hints {
     return sorted.first { $0.hasPrefix(first + " (started by ") } ?? first
   }
 
-  static func unplugProtection(_ helper: HelperHintState) -> Hint {
+  static func unplugProtection(_ helper: HelperHintState, displaysOnly: Bool = false) -> Hint {
+    let limitation = displaysOnly ? displayLimitation : rootlessLimitation
     switch helper {
     case .notInstalled:
-      Hint(priority: 5, icon: infoIcon, tint: .info, text: rootlessLimitation, action: .setUpUnplugProtection)
+      return Hint(priority: 5, icon: infoIcon, tint: .info, text: limitation, action: .setUpUnplugProtection)
     case .installedNotReady:
-      Hint(priority: 5, icon: infoIcon, tint: .info, text: rootlessLimitation, action: .reviewUnplugProtection)
+      return Hint(priority: 5, icon: infoIcon, tint: .info, text: limitation, action: .reviewUnplugProtection)
     case .ready:
-      Hint(priority: 5, icon: protectedIcon, tint: .info, text: unplugProtectionOn)
+      return Hint(
+        priority: 5, icon: protectedIcon, tint: .info,
+        text: displaysOnly ? unplugProtectionOnForDisplays : unplugProtectionOn)
     }
   }
 

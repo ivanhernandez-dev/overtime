@@ -36,6 +36,89 @@ struct StatusChipsTests {
     #expect(StatusChips.externalDisplayDetail == "An external display is connected.")
   }
 
+  struct LidDetailCase: Sendable, CustomTestStringConvertible {
+    let name: String
+    let snapshot: EngineSnapshot
+    let detail: String?
+
+    var testDescription: String { name }
+  }
+
+  static let holdOffCopy = "Closing the lid lets the Mac sleep."
+  static let onBatteryCopy = "On battery, closing the lid lets the Mac sleep."
+  static let unknownPowerCopy = "Until Overtime can read the power source, closing the lid lets the Mac sleep."
+
+  static let lidDetailCases: [LidDetailCase] = [
+    LidDetailCase(
+      name: "never on power",
+      snapshot: EngineSnapshot(
+        wanted: true, lidClosed: false, power: .ac(percent: 80), lidClosedKeepAwake: .never,
+        lidClosedHoldAllowed: false),
+      detail: holdOffCopy),
+    LidDetailCase(
+      name: "power adapter on battery",
+      snapshot: EngineSnapshot(
+        wanted: true, lidClosed: false, power: .battery(percent: 50), lidClosedKeepAwake: .onPowerAdapter,
+        lidClosedHoldAllowed: false),
+      detail: onBatteryCopy),
+    LidDetailCase(
+      name: "power adapter with no reading",
+      snapshot: EngineSnapshot(
+        wanted: true, lidClosed: false, lidClosedKeepAwake: .onPowerAdapter, lidClosedHoldAllowed: false),
+      detail: unknownPowerCopy),
+    LidDetailCase(
+      name: "power adapter on battery, lid unknown",
+      snapshot: EngineSnapshot(
+        wanted: true, power: .battery(percent: 50), lidClosedKeepAwake: .onPowerAdapter,
+        lidClosedHoldAllowed: false),
+      detail: onBatteryCopy),
+    LidDetailCase(
+      name: "power adapter on power, allowed",
+      snapshot: EngineSnapshot(
+        wanted: true, lidClosed: false, power: .ac(percent: 80), lidClosedKeepAwake: .onPowerAdapter,
+        lidClosedHoldAllowed: true),
+      detail: nil),
+    LidDetailCase(
+      name: "always, allowed",
+      snapshot: EngineSnapshot(wanted: true, lidClosed: false, power: .battery(percent: 50)),
+      detail: nil),
+    LidDetailCase(
+      name: "never, not wanted",
+      snapshot: EngineSnapshot(
+        wanted: false, lidClosed: false, power: .ac(percent: 80), lidClosedKeepAwake: .never,
+        lidClosedHoldAllowed: false),
+      detail: nil),
+    LidDetailCase(
+      name: "never, lid closed",
+      snapshot: EngineSnapshot(
+        wanted: true, lidClosed: true, power: .ac(percent: 80), lidClosedKeepAwake: .never,
+        lidClosedHoldAllowed: false),
+      detail: nil),
+    LidDetailCase(
+      name: "never, lid closed with a display",
+      snapshot: EngineSnapshot(
+        wanted: true, lidClosed: true, power: .ac(percent: 80), externalDisplays: 1, lidClosedKeepAwake: .never,
+        lidClosedHoldAllowed: false),
+      detail: StatusChips.externalDisplayDetail),
+  ]
+
+  @Test(arguments: lidDetailCases)
+  func theLidDetailSaysWhatClosingTheLidDoesWhileTheHoldIsOff(_ item: LidDetailCase) throws {
+    let summary = StatusChipSummary.make(for: item.snapshot)
+    let lid = try Self.chip(.lid, in: summary)
+    let details = summary.details.filter { $0.kind == .lid }
+    if let detail = item.detail {
+      try #require(details.count == 1)
+      #expect(details[0].text == detail)
+      #expect(details[0].symbol == lid.symbol)
+    } else {
+      #expect(details.isEmpty)
+    }
+    #expect(StatusChips.lidClosedHoldOffDetail == Self.holdOffCopy)
+    #expect(StatusChips.onBatteryLidDetail == Self.onBatteryCopy)
+    #expect(StatusChips.unknownPowerLidDetail == Self.unknownPowerCopy)
+  }
+
   @Test func theBatteryChipShowsThePercentageAndTheGlyphOfItsReading() throws {
     let cases: [(PowerReading?, String, String)] = [
       (.battery(percent: 72), "72%", "battery.75percent"),
