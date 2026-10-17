@@ -175,6 +175,119 @@ struct ReleaseSourceGateTests {
       ? [] : ["\(cask.path):\(line.number) uninstall beyond quit"]
   }
 
+  static let servedCask = "Casks/overtime.rb"
+  static let shortVersionLivecheck = "    strategy :sparkle, &:short_version"
+  static let caskVersionPattern = #"^(0|[1-9][0-9]?)\.(0|[1-9][0-9]?)\.(0|[1-9][0-9]?)$"#
+  static let caskShaPattern = #"^[0-9a-f]{64}$"#
+  static let tapLoadedFolders: Set<String> = ["cmd", "completions", "formula", "homebrewformula", "manpages"]
+  static let tapNameFiles: Set<String> = ["cask_renames.json", "formula_renames.json", "tap_migrations.json"]
+
+  static func caskValue(_ key: String, in file: SourceFile) -> String? {
+    let lines = plainLines(file.text).map { $0.text.trimmingCharacters(in: .whitespaces) }.filter {
+      $0.hasPrefix(key + " ")
+    }
+    guard lines.count == 1, let line = lines.first else { return nil }
+    let quoted = line.dropFirst(key.count + 1)
+    guard quoted.count >= 2, quoted.hasPrefix("\""), quoted.hasSuffix("\"") else { return nil }
+    let value = quoted.dropFirst().dropLast()
+    return value.contains("\"") ? nil : String(value)
+  }
+
+  static func servedCaskFindings(cask: SourceFile, template: SourceFile) -> [String] {
+    guard let version = caskValue("version", in: cask) else { return ["\(cask.path) has no single version line"] }
+    guard matches(version, caskVersionPattern) else {
+      return ["\(cask.path) version \(version) is not X.Y.Z with parts 0 to 99"]
+    }
+    guard let sha = caskValue("sha256", in: cask) else { return ["\(cask.path) has no single sha256 line"] }
+    guard matches(sha, caskShaPattern) else { return ["\(cask.path) sha256 is not 64 lowercase hex characters"] }
+    var findings: [String] = []
+    let strategies = plainLines(template.text).filter {
+      $0.text.trimmingCharacters(in: .whitespaces).hasPrefix("strategy ")
+    }
+    if strategies.count != 1 || strategies.first?.text != shortVersionLivecheck {
+      findings.append("\(template.path) lacks the Sparkle short-version livecheck")
+    }
+    let rendered = template.text.replacingOccurrences(of: "{{VERSION}}", with: version)
+      .replacingOccurrences(of: "{{ZIP_SHA256}}", with: sha)
+    if rendered != cask.text {
+      findings.append("\(cask.path) is not \(template.path) rendered for \(version)")
+    }
+    return findings
+  }
+
+  static func servedCaskMutant(_ name: String, cask: SourceFile, template: SourceFile) throws
+    -> (cask: SourceFile, template: SourceFile)
+  {
+    let version = try #require(caskValue("version", in: cask))
+    let sha = try #require(caskValue("sha256", in: cask))
+    func edit(_ file: SourceFile, _ old: String, _ new: String) throws -> SourceFile {
+      let changed = try #require(try replacing([file], in: file.path, old, with: new).first)
+      #expect(changed.text != file.text, "\(name)")
+      return changed
+    }
+    let bareLivecheck = "    strategy :sparkle\n"
+    let versionLine = #"version "\#(version)""#
+    let shaLine = #"sha256 "\#(sha)""#
+    switch name {
+    case "the bare Sparkle livecheck in the cask only":
+      return (try edit(cask, shortVersionLivecheck + "\n", bareLivecheck), template)
+    case "a two-part version":
+      let twoParts = version.split(separator: ".").dropLast().joined(separator: ".")
+      return (try edit(cask, versionLine, #"version "\#(twoParts)""#), template)
+    case "a leading-zero version part":
+      return (try edit(cask, versionLine, #"version "0\#(version)""#), template)
+    case "an uppercase sha256":
+      return (try edit(cask, shaLine, #"sha256 "\#(sha.uppercased())""#), template)
+    case "a second version line":
+      let line = "  version \"\(version)\"\n"
+      return (try edit(cask, line, line + line), template)
+    case "a placeholder left in the cask":
+      return (try edit(cask, shaLine, #"sha256 "{{ZIP_SHA256}}""#), template)
+    case "an extra trash path in the cask only":
+      let anchor = "      trash:     [\n"
+      return (try edit(cask, anchor, anchor + "        \"~/Library/Planted\",\n"), template)
+    case "the bare Sparkle livecheck in the template and the cask":
+      return (
+        try edit(cask, shortVersionLivecheck + "\n", bareLivecheck),
+        try edit(template, shortVersionLivecheck + "\n", bareLivecheck)
+      )
+    default:
+      Issue.record("unknown mutant \(name)")
+      return (cask, template)
+    }
+  }
+
+  static func tapSurfaceFindings(root: [String], casks: [String]) -> [String] {
+    var findings: [String] = []
+    for entry in root.sorted() {
+      let name = entry.lowercased()
+      if name.hasSuffix(".rb") {
+        findings.append("\(entry) is a formula Homebrew loads from a tap root")
+      } else if tapLoadedFolders.contains(name) {
+        findings.append("\(entry) is a folder Homebrew loads from a tap")
+      } else if tapNameFiles.contains(name) {
+        findings.append("\(entry) renames or moves names in a tap")
+      }
+    }
+    let served = casks.filter { $0 != ".DS_Store" }
+    findings += served.filter { $0 != "overtime.rb" }.sorted().map { "Casks/\($0) is a second cask" }
+    if !served.contains("overtime.rb") {
+      findings.append("\(servedCask) is missing")
+    }
+    return findings
+  }
+
+  static func liveTapSurface() throws -> (root: [String], casks: [String]) {
+    let manager = FileManager.default
+    let root = try manager.contentsOfDirectory(atPath: NetworkSourceGateTests.repositoryRoot.path)
+    let casksPath = NetworkSourceGateTests.repositoryRoot.appendingPathComponent("Casks").path
+    var casks: [String] = []
+    if manager.fileExists(atPath: casksPath) {
+      casks = try manager.contentsOfDirectory(atPath: casksPath)
+    }
+    return (root, casks)
+  }
+
   static func forbiddenWorkflowFindings(_ files: [SourceFile]) -> [String] {
     lineFindings(files, "pull_request_target") { $0.contains("pull_request_target") }
       + lineFindings(files, "macos-14 runner") { $0.contains("macos-14") }
@@ -659,6 +772,59 @@ struct ReleaseSourceGateTests {
     let cask = try Self.read(Self.caskTemplate)
     let changed = try #require(try Self.replacing([cask], in: Self.caskTemplate, old, with: new).first)
     Self.expectOne(Self.caskUninstallFindings(changed), naming: Self.caskTemplate)
+  }
+
+  @Test func theServedCaskIsTheTemplateRenderedForOneRelease() throws {
+    let cask = try Self.read(Self.servedCask)
+    let template = try Self.read(Self.caskTemplate)
+    #expect(Self.servedCaskFindings(cask: cask, template: template) == [])
+    #expect(Self.caskUninstallFindings(cask) == [])
+    #expect(Self.keysFolderFindings([cask]) == [])
+    #expect(Self.machineSpecificFindings([cask]) == [])
+  }
+
+  @Test(arguments: [
+    ("the bare Sparkle livecheck in the cask only", servedCask),
+    ("a two-part version", servedCask),
+    ("a leading-zero version part", servedCask),
+    ("an uppercase sha256", servedCask),
+    ("a second version line", servedCask),
+    ("a placeholder left in the cask", servedCask),
+    ("an extra trash path in the cask only", servedCask),
+    ("the bare Sparkle livecheck in the template and the cask", caskTemplate),
+  ])
+  func theServedCaskGateCatchesAPlantedDrift(mutant: String, path: String) throws {
+    let changed = try Self.servedCaskMutant(
+      mutant, cask: try Self.read(Self.servedCask), template: try Self.read(Self.caskTemplate))
+    Self.expectOne(Self.servedCaskFindings(cask: changed.cask, template: changed.template), naming: path)
+  }
+
+  @Test func theRepositoryServesOneCaskAndNothingElseHomebrewLoads() throws {
+    let surface = try Self.liveTapSurface()
+    #expect(Self.tapSurfaceFindings(root: surface.root, casks: surface.casks) == [])
+    #expect(surface.root.contains("Casks"))
+  }
+
+  @Test(arguments: [
+    "overtime.rb", "Formula", "HomebrewFormula", "cmd", "completions", "manpages", "tap_migrations.json",
+  ])
+  func theTapSurfaceGateCatchesAPlantedEntry(entry: String) {
+    let root = ["Casks", "README.md", "packaging", entry]
+    Self.expectOne(Self.tapSurfaceFindings(root: root, casks: ["overtime.rb"]), naming: entry)
+  }
+
+  @Test func theTapSurfaceGateCatchesASecondOrMissingCask() {
+    let root = ["Casks", "README.md", "packaging"]
+    Self.expectOne(
+      Self.tapSurfaceFindings(root: root, casks: ["overtime.rb", "overtime-beta.rb"]), naming: "Casks/overtime-beta.rb")
+    Self.expectOne(Self.tapSurfaceFindings(root: root, casks: []), naming: Self.servedCask)
+    Self.expectOne(Self.tapSurfaceFindings(root: root, casks: [".DS_Store"]), naming: Self.servedCask)
+  }
+
+  @Test(arguments: ["overtime.rb.template", ".DS_Store", "Formulae.md", "commands"])
+  func theTapSurfaceGateIgnoresEntriesHomebrewDoesNotLoad(entry: String) {
+    let root = ["Casks", "README.md", "packaging", entry]
+    #expect(Self.tapSurfaceFindings(root: root, casks: ["overtime.rb"]) == [])
   }
 
   @Test func theWorkflowsUsePinnedActionsNoPullRequestTargetNoMacOS14AndNoCacheInRelease() throws {
