@@ -180,6 +180,15 @@ struct ControlMappingTests {
     #expect(availability.releaseHelp == releaseHelp)
   }
 
+  @Test func aHotBatteryDisablesReleaseLikeTheBatteryFloor() {
+    let snapshot = EngineSnapshot(busy: true, wanted: false, reason: "temperature", temperatureBlocked: true)
+    let presentation = StatusPresentation.derive(snapshot: snapshot, hostFailure: nil, engineUnresponsive: false)
+    #expect(presentation.state == .batteryFloor)
+    let availability = ControlAvailability.from(presentation, snapshot: snapshot)
+    #expect(!availability.releaseEnabled)
+    #expect(availability.releaseHelp == ControlMapping.releaseUnavailableHelp)
+  }
+
   struct FailureCase: Sendable, CustomTestStringConvertible {
     let action: ControlAction
     let copy: String

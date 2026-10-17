@@ -151,6 +151,10 @@ public struct TimingLine: Sendable, Equatable {
       let lead = TimingLine(
         text: "Resumes on power or at \(percent)%", spoken: "resumes on power or at \(percent) percent")
       return TimingParts(lead: lead, held: nil)
+    case .batteryHot(let celsius):
+      let lead = TimingLine(
+        text: "Resumes below \(celsius)°C", spoken: "resumes below \(celsius) degrees Celsius")
+      return TimingParts(lead: lead, held: nil)
     }
   }
 

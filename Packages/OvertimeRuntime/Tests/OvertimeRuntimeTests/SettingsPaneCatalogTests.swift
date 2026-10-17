@@ -16,7 +16,7 @@ struct SettingsPaneCatalogTests {
       summaries == [
         "Launch at login, the display and notifications.",
         "How Overtime tells that Claude is working.",
-        "When Overtime lets the Mac sleep on battery.",
+        "When Overtime lets the Mac sleep to protect the battery.",
         "Switching to your iPhone hotspot when the network fails.",
         "Keeps the lid-closed Mac awake when you unplug power or a display.",
         "Detection health, the self-test and an export for bug reports.",

@@ -67,6 +67,11 @@ public struct StatusChipSummary: Sendable, Equatable {
     if case .battery(_?)? = snapshot?.power, snapshot?.batteryBlocked == true {
       let lowPercent = snapshot?.batteryLowPercent ?? Settings().batteryLowPercent
       details.append(StatusDetail(kind: .battery, symbol: battery.icon, text: StatusChips.belowFloorDetail(lowPercent)))
+    } else if let snapshot, snapshot.temperatureBlocked, !snapshot.batteryBlocked {
+      details.append(
+        StatusDetail(
+          kind: .battery, symbol: battery.icon,
+          text: StatusChips.hotDetail(releaseCelsius: snapshot.temperatureReleaseCelsius)))
     }
     if let detail = network.detail {
       details.append(StatusDetail(kind: .network, symbol: network.icon, text: detail))
@@ -90,6 +95,10 @@ public enum StatusChips {
 
   public static func belowFloorDetail(_ lowPercent: Int) -> String {
     "On battery, below \(lowPercent)%."
+  }
+
+  public static func hotDetail(releaseCelsius: Int) -> String {
+    "Battery at or above \(releaseCelsius)°C."
   }
 
   static func lidText(_ closed: Bool?) -> String {

@@ -76,12 +76,19 @@ public struct StatusPresentation: Sendable, Equatable {
       result.reason = holdingReason(
         sessionCount: PanelContent.working(snapshot?.sessions ?? [], busy: snapshot?.busy == true).count)
     case .batteryFloor:
-      if let percent = snapshot?.power?.percent {
+      if let snapshot, !snapshot.batteryBlocked, snapshot.temperatureBlocked {
+        result.title = hotTitle
+        result.accessibilityLabel = hotAccessibilityLabel
+        result.reason = hotReason
+        if case .celsius(let celsius)? = snapshot.batteryTemperature {
+          result.reason = "Battery at \(celsius)°C. \(hotReason)"
+        }
+      } else if let percent = snapshot?.power?.percent {
         result.reason = "Battery at \(percent)%. \(result.reason)"
       }
     case .override:
-      if let low = snapshot?.batteryLowPercent {
-        result.reason = overrideReason(lowPercent: low)
+      if let snapshot {
+        result.reason = overrideReason(lowPercent: snapshot.batteryProtectionEnabled ? snapshot.batteryLowPercent : nil)
       }
     default:
       break
@@ -93,8 +100,13 @@ public struct StatusPresentation: Sendable, Equatable {
     state == .starting
   }
 
-  public static func overrideReason(lowPercent: Int) -> String {
-    "You turned on \(ControlMapping.keepAwakeLabel). It still stops at \(lowPercent)% battery."
+  public static let hotTitle = "Battery hot"
+  public static let hotAccessibilityLabel = "Overtime, battery hot, keep-awake off"
+  public static let hotReason = "Keep-awake is off so the battery can cool down."
+
+  public static func overrideReason(lowPercent: Int?) -> String {
+    guard let lowPercent else { return "You turned on \(ControlMapping.keepAwakeLabel)." }
+    return "You turned on \(ControlMapping.keepAwakeLabel). It still stops at \(lowPercent)% battery."
   }
 
   public static func holdingReason(sessionCount: Int) -> String {
@@ -131,7 +143,7 @@ public struct StatusPresentation: Sendable, Equatable {
     if snapshot.selfTestErrorActive {
       return .error(.selfTestFailed)
     }
-    if snapshot.batteryBlocked {
+    if snapshot.batteryBlocked || snapshot.temperatureBlocked {
       return .batteryFloor
     }
     if snapshot.pause != nil {
@@ -256,6 +268,7 @@ public enum TimingKind: Sendable, Equatable {
   case forceUntilMono(Instant, since: Instant?)
   case forceIndefinite(since: Instant?)
   case batteryFloor(resumePercent: Int)
+  case batteryHot(resumeCelsius: Int)
 }
 
 extension StatusPresentation {
@@ -280,7 +293,10 @@ extension StatusPresentation {
       }
       return .forceIndefinite(since: snapshot.wantedSince)
     case .batteryFloor:
-      return .batteryFloor(resumePercent: snapshot.batteryResumePercent)
+      if snapshot.batteryBlocked {
+        return .batteryFloor(resumePercent: snapshot.batteryResumePercent)
+      }
+      return .batteryHot(resumeCelsius: snapshot.temperatureResumeCelsius)
     case .starting, .idle, .uninstalling, .error:
       return nil
     }

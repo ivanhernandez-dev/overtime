@@ -73,7 +73,7 @@ public enum SettingsPane: String, CaseIterable, Sendable, Identifiable {
     case .detection:
       "How Overtime tells that Claude is working."
     case .battery:
-      "When Overtime lets the Mac sleep on battery."
+      "When Overtime lets the Mac sleep to protect the battery."
     case .network:
       "Switching to your iPhone hotspot when the network fails."
     case .unplugProtection:

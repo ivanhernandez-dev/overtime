@@ -355,6 +355,51 @@ struct StatusPresentationTests {
         == StatusPresentation.overrideReason(lowPercent: Settings().batteryLowPercent))
   }
 
+  static let hot = EngineSnapshot(busy: true, wanted: false, reason: "temperature", temperatureBlocked: true)
+
+  @Test func aHotBatteryShowsTheBatteryLimitStateWithTheHotCopy() {
+    let presentation = StatusPresentation.derive(snapshot: Self.hot, hostFailure: nil, engineUnresponsive: false)
+    #expect(presentation.state == .batteryFloor)
+    #expect(presentation.glyph == .batteryLow)
+    #expect(presentation.title == "Battery hot")
+    #expect(presentation.accessibilityLabel == "Overtime, battery hot, keep-awake off")
+  }
+
+  @Test func theHotReasonNamesTheReadingWhenItIsKnown() {
+    var known = Self.hot
+    known.batteryTemperature = .celsius(47)
+    let knownReason = StatusPresentation.derive(snapshot: known, hostFailure: nil, engineUnresponsive: false).reason
+    #expect(knownReason == "Battery at 47°C. Keep-awake is off so the battery can cool down.")
+    var unreadable = Self.hot
+    unreadable.batteryTemperature = .unreadable
+    let unreadableReason = StatusPresentation.derive(
+      snapshot: unreadable, hostFailure: nil, engineUnresponsive: false
+    ).reason
+    #expect(unreadableReason == "Keep-awake is off so the battery can cool down.")
+  }
+
+  @Test func aLowBatteryKeepsTheLowCopyWhenTheBatteryIsAlsoHot() {
+    let snapshot = EngineSnapshot(
+      busy: true, wanted: false, reason: "battery", batteryBlocked: true, power: .battery(percent: 9),
+      temperatureBlocked: true, batteryTemperature: .celsius(47))
+    let presentation = StatusPresentation.derive(snapshot: snapshot, hostFailure: nil, engineUnresponsive: false)
+    #expect(presentation.state == .batteryFloor)
+    #expect(presentation.title == "Battery low")
+    #expect(presentation.accessibilityLabel == "Overtime, battery low, keep-awake off")
+    #expect(presentation.reason == "Battery at 9%. Keep-awake is off so the Mac can sleep.")
+  }
+
+  @Test func withBatteryProtectionOffTheOverrideReasonDropsTheBatterySentence() {
+    let off = EngineSnapshot(
+      wanted: true, reason: "forced", force: .indefinite, batteryLowPercent: 15, batteryProtectionEnabled: false)
+    let offReason = StatusPresentation.derive(snapshot: off, hostFailure: nil, engineUnresponsive: false).reason
+    #expect(offReason == "You turned on Keep Awake.")
+    #expect(StatusPresentation.overrideReason(lowPercent: nil) == "You turned on Keep Awake.")
+    let on = EngineSnapshot(wanted: true, reason: "forced", force: .indefinite, batteryLowPercent: 15)
+    let onReason = StatusPresentation.derive(snapshot: on, hostFailure: nil, engineUnresponsive: false).reason
+    #expect(onReason == "You turned on Keep Awake. It still stops at 15% battery.")
+  }
+
   @Test(arguments: [
     PanelState.starting, .idle, .holding, .lidClosedHolding, .grace, .paused, .releasedUntilIdle, .batteryFloor,
     .override, .uninstalling, .error(.holdFailed), .error(.selfTestFailed), .error(.notResponding),

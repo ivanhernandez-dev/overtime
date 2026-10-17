@@ -67,6 +67,25 @@ struct StatusChipsTests {
     #expect(StatusChips.belowFloorDetail(15) == "On battery, below 15%.")
   }
 
+  @Test func aHotBatteryAddsTheTemperatureDetail() throws {
+    for power in [PowerReading.battery(percent: 50), .ac(percent: 80)] {
+      let hot = StatusChipSummary.make(
+        for: EngineSnapshot(power: power, temperatureBlocked: true, temperatureReleaseCelsius: 45))
+      let battery = try Self.chip(.battery, in: hot)
+      let details = hot.details.filter { $0.kind == .battery }
+      try #require(details.count == 1)
+      #expect(details[0].text == "Battery at or above 45°C.")
+      #expect(details[0].symbol == battery.symbol)
+    }
+    #expect(StatusChips.hotDetail(releaseCelsius: 50) == "Battery at or above 50°C.")
+    let both = StatusChipSummary.make(
+      for: EngineSnapshot(
+        batteryBlocked: true, batteryLowPercent: 10, power: .battery(percent: 9), temperatureBlocked: true,
+        temperatureReleaseCelsius: 45))
+    let details = both.details.filter { $0.kind == .battery }.map(\.text)
+    #expect(details == ["On battery, below 10%."])
+  }
+
   @Test func theNetworkChipKeepsTheRowValueAndItsDetail() throws {
     let switched = NetworkStatusLineTests.summary(switched: true, readiness: .armed(.configured))
     let cases: [(EngineSnapshot, String, String, String?)] = [

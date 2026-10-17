@@ -107,6 +107,17 @@ struct TimingFormatTests {
     #expect(line(snapshot)?.text == "Resumes on power or at 35%")
   }
 
+  @Test func theHotTimingLineNamesTheResumeTemperature() {
+    let snapshot = EngineSnapshot(
+      busy: true, wanted: false, reason: "temperature", temperatureBlocked: true, temperatureReleaseCelsius: 45,
+      temperatureResumeCelsius: 40)
+    let kind = StatusPresentation.timingKind(state: .batteryFloor, snapshot: snapshot)
+    #expect(kind == .batteryHot(resumeCelsius: 40))
+    let lead = parts(snapshot)?.lead
+    #expect(lead == TimingLine(text: "Resumes below 40°C", spoken: "resumes below 40 degrees Celsius"))
+    #expect(line(snapshot)?.text == "Resumes below 40°C")
+  }
+
   @Test func aWallPauseThatIsNotMidnightCountsDown() {
     let snapshot = EngineSnapshot(
       wanted: false, reason: "paused", pause: .untilWall(Self.nowWall.addingTimeInterval(90)))
