@@ -13,6 +13,10 @@ struct UnplugProtectionPane: View {
     keep: HelperStatusPresentation.removeConfirmationKeep
   )
 
+  static func settingNote(for model: SettingsModel) -> String? {
+    LidClosedCopy.settingNote(model.settings.lidClosedKeepAwake)
+  }
+
   static func role(for action: HelperStatusAction) -> ButtonRole? {
     action.isDestructive ? .destructive : nil
   }
@@ -34,6 +38,9 @@ struct UnplugProtectionPane: View {
       if let state = helper.uiState {
         Section {
           HelperStatusRowView(state: state, detail: helper.detail, helper: helper)
+          if let note = Self.settingNote(for: model) {
+            SettingsSectionCaption(text: note)
+          }
           SleepDisabledRow(model: helper)
         } header: {
           SettingsSectionHeader(title: Self.statusTitle)

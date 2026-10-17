@@ -205,7 +205,8 @@ struct SettingsEditorTests {
       case .transcriptWindowSeconds: raw.transcriptWindowSeconds = value
       case .releaseGraceSeconds: raw.releaseGraceSeconds = value
       case .stuckWindowMinutes: raw.stuckWindowSeconds = value * 60
-      case .batteryLowPercent, .batteryResumePercent, .helperBatteryFloorPercent, .temperatureReleaseCelsius:
+      case .batteryLowPercent, .batteryResumePercent, .helperBatteryFloorPercent, .temperatureReleaseCelsius,
+        .pauseFirstMinutes, .pauseSecondMinutes, .keepAwakeFirstMinutes, .keepAwakeSecondMinutes:
         Issue.record("not a timing field")
       }
       switch SettingsEditor.validate(field, text: text, in: base) {
@@ -253,6 +254,58 @@ struct SettingsEditorTests {
     #expect(floor.validated().adjustments.map(\.key) == [SettingsField.helperBatteryFloorPercent.rawValue])
     let release = Settings(temperatureReleaseCelsius: 99)
     #expect(release.validated().adjustments.map(\.key) == [SettingsField.temperatureReleaseCelsius.rawValue])
+    #expect(SettingsField.pauseFirstMinutes.rawValue == "pauseFirstMinutes")
+    #expect(SettingsField.pauseSecondMinutes.rawValue == "pauseSecondMinutes")
+    #expect(SettingsField.keepAwakeFirstMinutes.rawValue == "keepAwakeFirstMinutes")
+    #expect(SettingsField.keepAwakeSecondMinutes.rawValue == "keepAwakeSecondMinutes")
+    for field in Self.durationFields {
+      let settings = Self.with(field, 0, in: Settings())
+      #expect(settings.validated().adjustments.map(\.key) == [field.rawValue])
+    }
+  }
+
+  static let durationFields: [SettingsField] = [
+    .pauseFirstMinutes, .pauseSecondMinutes, .keepAwakeFirstMinutes, .keepAwakeSecondMinutes,
+  ]
+
+  static func with(_ field: SettingsField, _ value: Int, in settings: Settings) -> Settings {
+    var result = settings
+    switch field {
+    case .pauseFirstMinutes: result.pauseFirstMinutes = value
+    case .pauseSecondMinutes: result.pauseSecondMinutes = value
+    case .keepAwakeFirstMinutes: result.keepAwakeFirstMinutes = value
+    case .keepAwakeSecondMinutes: result.keepAwakeSecondMinutes = value
+    default: Issue.record("not a duration field")
+    }
+    return result
+  }
+
+  static func minutes(_ field: SettingsField, in settings: Settings) -> Int? {
+    switch field {
+    case .pauseFirstMinutes: settings.pauseFirstMinutes
+    case .pauseSecondMinutes: settings.pauseSecondMinutes
+    case .keepAwakeFirstMinutes: settings.keepAwakeFirstMinutes
+    case .keepAwakeSecondMinutes: settings.keepAwakeSecondMinutes
+    default: nil
+    }
+  }
+
+  @Test func theDurationFieldsTakeOneToFourteenForty() throws {
+    let message = "Enter a whole number of minutes from 1 to 1440."
+    #expect(SettingsEditor.durationRangeMessage == message)
+    for field in Self.durationFields {
+      for text in ["0", "1441", "x", ""] {
+        let result = SettingsEditor.validate(field, text: text, in: Settings())
+        #expect(Self.rejected(result) == message, "\(field) \(text)")
+      }
+      for value in [1, 45, 1440] {
+        let result = SettingsEditor.validate(field, text: "\(value)", in: Settings())
+        let candidate = try #require(Self.accepted(result), "\(field) \(value)")
+        #expect(Self.minutes(field, in: candidate) == value)
+        #expect(candidate == Self.with(field, value, in: Settings()))
+        #expect(!Self.flaggedByTheCore(candidate))
+      }
+    }
   }
 
   @Test(arguments: ["", "   "])

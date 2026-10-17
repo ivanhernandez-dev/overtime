@@ -14,7 +14,7 @@ struct SettingsPaneCatalogTests {
     let summaries = SettingsPane.allCases.map(\.summary)
     #expect(
       summaries == [
-        "Launch at login, the display and notifications.",
+        "Launch at login, lid and display, durations and notifications.",
         "How Overtime tells that Claude is working.",
         "When Overtime lets the Mac sleep to protect the battery.",
         "Switching to your iPhone hotspot when the network fails.",

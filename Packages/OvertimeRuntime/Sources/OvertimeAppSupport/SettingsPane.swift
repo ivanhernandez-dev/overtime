@@ -69,7 +69,7 @@ public enum SettingsPane: String, CaseIterable, Sendable, Identifiable {
   public var summary: String {
     switch self {
     case .general:
-      "Launch at login, the display and notifications."
+      "Launch at login, lid and display, durations and notifications."
     case .detection:
       "How Overtime tells that Claude is working."
     case .battery:

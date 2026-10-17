@@ -467,6 +467,28 @@ final class SettingsModel {
     }
   }
 
+  var lidClosedKeepAwake: LidClosedKeepAwake {
+    settings.lidClosedKeepAwake
+  }
+
+  @discardableResult
+  func setLidClosedKeepAwake(_ value: LidClosedKeepAwake) async -> SettingsCommitResult? {
+    await serialized { [self] in
+      guard settings.lidClosedKeepAwake != value else { return nil }
+      var candidate = settings
+      candidate.lidClosedKeepAwake = value
+      return await save(candidate)
+    }
+  }
+
+  var pauseChoices: [PauseChoice] {
+    PauseChoice.menu(timedMinutes: [settings.pauseFirstMinutes, settings.pauseSecondMinutes])
+  }
+
+  var keepAwakeChoices: [KeepAwakeChoice] {
+    KeepAwakeChoice.menu(timedMinutes: [settings.keepAwakeFirstMinutes, settings.keepAwakeSecondMinutes])
+  }
+
   var batteryProtectionEnabled: Bool {
     settings.batteryProtectionEnabled
   }
@@ -618,6 +640,8 @@ final class SettingsModel {
       10
     case .releaseGraceSeconds, .stuckWindowMinutes:
       5
+    case .pauseFirstMinutes, .pauseSecondMinutes, .keepAwakeFirstMinutes, .keepAwakeSecondMinutes:
+      5
     }
   }
 
@@ -717,6 +741,14 @@ final class SettingsModel {
       settings.helperBatteryFloorPercent
     case .temperatureReleaseCelsius:
       settings.temperatureReleaseCelsius
+    case .pauseFirstMinutes:
+      settings.pauseFirstMinutes
+    case .pauseSecondMinutes:
+      settings.pauseSecondMinutes
+    case .keepAwakeFirstMinutes:
+      settings.keepAwakeFirstMinutes
+    case .keepAwakeSecondMinutes:
+      settings.keepAwakeSecondMinutes
     }
   }
 
@@ -736,6 +768,8 @@ final class SettingsModel {
       Settings.helperBatteryFloorRange
     case .temperatureReleaseCelsius:
       Settings.temperatureReleaseRange
+    case .pauseFirstMinutes, .pauseSecondMinutes, .keepAwakeFirstMinutes, .keepAwakeSecondMinutes:
+      Settings.presetMinutesRange
     }
   }
 }

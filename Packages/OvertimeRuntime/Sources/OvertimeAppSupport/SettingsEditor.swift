@@ -10,6 +10,10 @@ public enum SettingsField: String, Sendable, CaseIterable {
   case stuckWindowMinutes
   case helperBatteryFloorPercent
   case temperatureReleaseCelsius
+  case pauseFirstMinutes
+  case pauseSecondMinutes
+  case keepAwakeFirstMinutes
+  case keepAwakeSecondMinutes
 }
 
 public struct SettingsValidationError: Error, Sendable, Equatable {
@@ -25,6 +29,7 @@ public enum SettingsEditor {
   public static let helperFloorRangeMessage = rangeMessage("a whole percentage", Settings.helperBatteryFloorRange)
   public static let temperatureReleaseRangeMessage = rangeMessage(
     "a whole number of degrees", Settings.temperatureReleaseRange)
+  public static let durationRangeMessage = rangeMessage("a whole number of minutes", Settings.presetMinutesRange)
 
   static func rangeMessage(_ kind: String, _ range: ClosedRange<Int>) -> String {
     "Enter \(kind) from \(range.lowerBound) to \(range.upperBound)."
@@ -195,6 +200,14 @@ public enum SettingsEditor {
       candidate.helperBatteryFloorPercent = value
     case .temperatureReleaseCelsius:
       candidate.temperatureReleaseCelsius = value
+    case .pauseFirstMinutes:
+      candidate.pauseFirstMinutes = value
+    case .pauseSecondMinutes:
+      candidate.pauseSecondMinutes = value
+    case .keepAwakeFirstMinutes:
+      candidate.keepAwakeFirstMinutes = value
+    case .keepAwakeSecondMinutes:
+      candidate.keepAwakeSecondMinutes = value
     }
     return candidate
   }
@@ -215,6 +228,8 @@ public enum SettingsEditor {
       SettingsValidationError(message: helperFloorRangeMessage)
     case .temperatureReleaseCelsius:
       SettingsValidationError(message: temperatureReleaseRangeMessage)
+    case .pauseFirstMinutes, .pauseSecondMinutes, .keepAwakeFirstMinutes, .keepAwakeSecondMinutes:
+      SettingsValidationError(message: durationRangeMessage)
     }
   }
 
@@ -263,6 +278,16 @@ public enum SettingsEditor {
         ? nil : rangeError(field, in: settings)
     case .temperatureReleaseCelsius:
       return Settings.temperatureReleaseRange.contains(settings.temperatureReleaseCelsius)
+        ? nil : rangeError(field, in: settings)
+    case .pauseFirstMinutes:
+      return Settings.presetMinutesRange.contains(settings.pauseFirstMinutes) ? nil : rangeError(field, in: settings)
+    case .pauseSecondMinutes:
+      return Settings.presetMinutesRange.contains(settings.pauseSecondMinutes) ? nil : rangeError(field, in: settings)
+    case .keepAwakeFirstMinutes:
+      return Settings.presetMinutesRange.contains(settings.keepAwakeFirstMinutes)
+        ? nil : rangeError(field, in: settings)
+    case .keepAwakeSecondMinutes:
+      return Settings.presetMinutesRange.contains(settings.keepAwakeSecondMinutes)
         ? nil : rangeError(field, in: settings)
     }
   }

@@ -70,6 +70,32 @@ struct GeneralPane: View {
     }
   }
 
+  static let durationsTitle = "Pause and Keep Awake"
+  static let durationFields: [SettingsField] = [
+    .pauseFirstMinutes, .pauseSecondMinutes, .keepAwakeFirstMinutes, .keepAwakeSecondMinutes,
+  ]
+
+  static func durationLabel(_ field: SettingsField) -> String {
+    switch field {
+    case .pauseFirstMinutes: "\(ControlMapping.pauseLabel), first choice"
+    case .pauseSecondMinutes: "\(ControlMapping.pauseLabel), second choice"
+    case .keepAwakeFirstMinutes: "\(ControlMapping.keepAwakeLabel), first choice"
+    case .keepAwakeSecondMinutes: "\(ControlMapping.keepAwakeLabel), second choice"
+    default: field.rawValue
+    }
+  }
+
+  static func durationsCaption(pause: [PauseChoice], keepAwake: [KeepAwakeChoice]) -> String {
+    "The panel's \(ControlMapping.pauseLabel) menu offers \(list(pause.map(\.label))), and its "
+      + "\(ControlMapping.keepAwakeLabel) menu offers \(list(keepAwake.map(\.label)))."
+  }
+
+  static func list(_ items: [String]) -> String {
+    guard let last = items.last else { return "" }
+    let rest = items.dropLast()
+    return rest.isEmpty ? last : rest.joined(separator: ", ") + " and " + last
+  }
+
   static let batteryProtectionOffCaption = "Battery protection is off in Settings > Battery."
   static let temperatureProtectionOffCaption = "Temperature protection is off in Settings > Battery."
 
@@ -107,6 +133,7 @@ struct GeneralPane: View {
       } header: {
         SettingsSectionHeader(title: Self.startupTitle)
       }
+      LidClosedSection(model: model)
       Section {
         VStack(alignment: .leading, spacing: 4) {
           Toggle(
@@ -127,6 +154,7 @@ struct GeneralPane: View {
       } header: {
         SettingsSectionHeader(title: Self.displayTitle)
       }
+      DurationsSection(model: model)
       NotificationsSection(model: model)
     }
     .formStyle(.grouped)
@@ -134,6 +162,57 @@ struct GeneralPane: View {
     .task { await model.refreshNotificationAuthorization() }
     .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
       Task { await model.refreshNotificationAuthorization() }
+    }
+  }
+}
+
+struct LidClosedSection: View {
+  let model: SettingsModel
+
+  var body: some View {
+    let caption = LidClosedCopy.caption(model.lidClosedKeepAwake)
+    Section {
+      VStack(alignment: .leading, spacing: 4) {
+        Picker(LidClosedCopy.label, selection: selection) {
+          ForEach(LidClosedKeepAwake.allCases, id: \.self) { value in
+            Text(LidClosedCopy.optionLabel(value))
+              .tag(value)
+          }
+        }
+        .pickerStyle(.menu)
+        .disabled(!model.canEdit)
+        .accessibilityHint(Text(caption))
+        SettingsSectionCaption(text: caption)
+          .accessibilityHidden(true)
+      }
+    } header: {
+      SettingsSectionHeader(title: LidClosedCopy.sectionTitle)
+    }
+  }
+
+  private var selection: Binding<LidClosedKeepAwake> {
+    Binding(
+      get: { model.lidClosedKeepAwake },
+      set: { value in
+        Task { await model.setLidClosedKeepAwake(value) }
+      })
+  }
+}
+
+struct DurationsSection: View {
+  let model: SettingsModel
+
+  var body: some View {
+    Section {
+      ForEach(GeneralPane.durationFields, id: \.self) { field in
+        NumericSettingRow(
+          label: GeneralPane.durationLabel(field), unit: "min", caption: nil, field: field, model: model)
+      }
+    } header: {
+      SettingsSectionHeader(title: GeneralPane.durationsTitle)
+    } footer: {
+      SettingsSectionCaption(
+        text: GeneralPane.durationsCaption(pause: model.pauseChoices, keepAwake: model.keepAwakeChoices))
     }
   }
 }
