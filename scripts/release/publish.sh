@@ -75,37 +75,43 @@ printf '%s\n' "$CASK_LINES" | grep -qxF "version \"$VERSION\"" || refuse "the ca
 printf '%s\n' "$CASK_LINES" | grep -qxF "sha256 \"$ZIP_SHA256\"" || refuse "the cask's sha256 is not the zip's"
 
 [ -n "${GH_TOKEN:-}" ] || refuse "GH_TOKEN is not set"
-[ -n "${HOMEBREW_TAP_TOKEN:-}" ] || refuse "HOMEBREW_TAP_TOKEN is not set"
-TAP_PATTERN='^[A-Za-z0-9-]+/homebrew-[A-Za-z0-9-]+$'
-[[ "${TAP_REPOSITORY:-}" =~ $TAP_PATTERN ]] || refuse "TAP_REPOSITORY in pins.env is not owner/homebrew-name"
-TAP_FILE="repos/$TAP_REPOSITORY/contents/Casks/overtime.rb"
+REPOSITORY_PATTERN='^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$'
+[[ "${GH_REPO:-}" =~ $REPOSITORY_PATTERN ]] || refuse "GH_REPO is not owner/name"
+CASK_FILE="repos/$GH_REPO/contents/Casks/overtime.rb"
 
 cd "$REPO"
+
+BLOB_PATTERN='^[0-9a-f]{40}$'
+CASK_BLOB="$(git hash-object --no-filters -- "$CASK" 2> /dev/null)" || CASK_BLOB=""
+[[ "$CASK_BLOB" =~ $BLOB_PATTERN ]] || refuse "git cannot compute the blob id of the cask"
 
 gh release create "$TAG" --draft --verify-tag --title "Overtime $VERSION" --notes-file "$NOTES" > /dev/null \
   || stop "creating the draft release failed; nothing was published"
 printf 'publish: draft created\n'
 
 gh release upload "$TAG" "$DIST/$DMG" "$DIST/$ZIP" "$DIST/appcast.xml" "$DIST/SHA256SUMS" > /dev/null \
-  || stop "uploading the assets failed; the release stays a draft and the tap is untouched"
+  || stop "uploading the assets failed; the release stays a draft and the cask is untouched"
 printf 'publish: assets uploaded\n'
 
 gh release edit "$TAG" --draft=false --latest > /dev/null \
-  || stop "publishing the draft failed; the release stays a draft and the tap is untouched"
+  || stop "publishing the draft failed; the release stays a draft and the cask is untouched"
 printf 'publish: published as latest\n'
 
 CURRENT_SHA=""
-if READ_SHA="$(GH_TOKEN="$HOMEBREW_TAP_TOKEN" gh api "$TAP_FILE" --jq .sha 2> /dev/null)"; then
-  BLOB_PATTERN='^[0-9a-f]{40}$'
+if READ_SHA="$(gh api "$CASK_FILE?ref=main" --jq .sha 2> /dev/null)"; then
   if [[ "$READ_SHA" =~ $BLOB_PATTERN ]]; then
     CURRENT_SHA="$READ_SHA"
   fi
 fi
+if [ "$CURRENT_SHA" = "$CASK_BLOB" ]; then
+  printf 'publish: cask already current\n'
+  exit 0
+fi
 CONTENT="$(base64 < "$CASK" | tr -d '\n')"
-PUT=(api -X PUT "$TAP_FILE" -f "message=overtime $VERSION" -f "content=$CONTENT")
+PUT=(api -X PUT "$CASK_FILE" -f "message=Update the cask to $VERSION" -f "content=$CONTENT" -f "branch=main")
 if [ -n "$CURRENT_SHA" ]; then
   PUT+=(-f "sha=$CURRENT_SHA")
 fi
-GH_TOKEN="$HOMEBREW_TAP_TOKEN" gh "${PUT[@]}" > /dev/null \
-  || stop "updating the tap failed; release $TAG is published and the tap still has the previous cask"
-printf 'publish: tap updated\n'
+gh "${PUT[@]}" > /dev/null \
+  || stop "updating the cask failed; release $TAG is published and Casks/overtime.rb on main still has the previous version"
+printf 'publish: cask updated\n'

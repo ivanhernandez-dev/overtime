@@ -9,7 +9,6 @@ printf '%s\n' \
   'who=other' \
   'case "${GH_TOKEN:-}" in' \
   '  "$FAKE_RELEASE_TOKEN") who=release ;;' \
-  '  "$FAKE_TAP_TOKEN") who=tap ;;' \
   'esac' \
   'printf "%s\t%s\n" "${1:-}" "$who" >> "$T/tokens.log"' \
   'exec "$T/libexec/gh" "$@"' > "$T/gh-wrapper"
@@ -17,14 +16,14 @@ chmod 755 "$T/gh-wrapper"
 mv -f "$T/gh-wrapper" "$T/bin/gh"
 
 FAKE_RELEASE_TOKEN="fake-release-token-value-7f3a"
-FAKE_TAP_TOKEN="fake-tap-token-value-91c2"
 FAKE_COMMIT="1111111111111111111111111111111111111111"
 CURRENT_BLOB="2222222222222222222222222222222222222222"
-export FAKE_RELEASE_TOKEN FAKE_TAP_TOKEN
+export FAKE_RELEASE_TOKEN
 
 V="$(awk '$1 == "MARKETING_VERSION:" { print $2; exit }' "$REPO/project.yml")"
 if [ "$V" = "0.1.1" ]; then OTHER="0.1.2"; else OTHER="0.1.1"; fi
-TAP_FILE="repos/ivanhernandez-dev/homebrew-tap/contents/Casks/overtime.rb"
+REPOSITORY="ivanhernandez-dev/overtime"
+CASK_FILE="repos/$REPOSITORY/contents/Casks/overtime.rb"
 PUBLISH_LOG="$T/publish.log"
 
 make_from() {
@@ -66,13 +65,13 @@ publish() {
     shift 2
   done
   for pair in CI=true "GITHUB_REF=refs/tags/v$V" "GITHUB_SHA=$FAKE_COMMIT" "GH_TOKEN=$FAKE_RELEASE_TOKEN" \
-    "HOMEBREW_TAP_TOKEN=$FAKE_TAP_TOKEN"; do
+    "GH_REPO=$REPOSITORY"; do
     case "$dropped" in
       *" ${pair%%=*} "*) ;;
       *) pairs+=("$pair") ;;
     esac
   done
-  env -u CI -u GITHUB_REF -u GITHUB_SHA -u GH_TOKEN -u HOMEBREW_TAP_TOKEN -u GITHUB_TOKEN -u GH_REPO \
+  env -u CI -u GITHUB_REF -u GITHUB_SHA -u GH_TOKEN -u GITHUB_TOKEN -u GH_REPO \
     "${pairs[@]}" "$@" > "$PUBLISH_LOG" 2>&1
 }
 
@@ -114,8 +113,8 @@ expected_happy_calls() {
     "release create v$V --draft --verify-tag --title Overtime $V --notes-file $FROM/notes-$V.md" \
     "release upload v$V $FROM/dist/Overtime-$V.dmg $FROM/dist/Overtime-$V.zip $FROM/dist/appcast.xml $FROM/dist/SHA256SUMS" \
     "release edit v$V --draft=false --latest" \
-    "api $TAP_FILE --jq .sha" \
-    "api -X PUT $TAP_FILE -f message=overtime $V -f content=$(base64 < "$FROM/Casks/overtime.rb" | tr -d '\n') -f sha=$CURRENT_BLOB"
+    "api $CASK_FILE?ref=main --jq .sha" \
+    "api -X PUT $CASK_FILE -f message=Update the cask to $V -f content=$(base64 < "$FROM/Casks/overtime.rb" | tr -d '\n') -f branch=main -f sha=$CURRENT_BLOB"
 }
 
 happy_run() {
@@ -143,26 +142,52 @@ happy_path_uploads_exactly_the_four_assets() {
 happy_path_prints_the_steps_in_order() {
   happy_run || return 1
   [ "$(cat "$PUBLISH_LOG")" = "$(printf '%s\n' 'publish: draft created' 'publish: assets uploaded' \
-    'publish: published as latest' 'publish: tap updated')" ] || { cat "$PUBLISH_LOG"; return 1; }
+    'publish: published as latest' 'publish: cask updated')" ] || { cat "$PUBLISH_LOG"; return 1; }
 }
 
-release_calls_use_the_release_token_and_tap_calls_the_tap_token() {
+every_gh_call_carries_the_workflow_token() {
   happy_run || return 1
-  [ "$(cat "$T/tokens.log")" = "$(printf 'release\trelease\nrelease\trelease\nrelease\trelease\napi\ttap\napi\ttap\n')" ] \
+  [ "$(cat "$T/tokens.log")" = "$(printf 'release\trelease\nrelease\trelease\nrelease\trelease\napi\trelease\napi\trelease\n')" ] \
     || { cat "$T/tokens.log"; return 1; }
 }
 
 tokens_never_appear_in_output_or_arguments() {
   happy_run || return 1
-  ! grep -qF -e "$FAKE_RELEASE_TOKEN" -e "$FAKE_TAP_TOKEN" "$PUBLISH_LOG" "$SHIM_LOG"
+  ! grep -qF -e "$FAKE_RELEASE_TOKEN" "$PUBLISH_LOG" "$SHIM_LOG"
 }
 
 no_curl_brew_or_git_write() {
   happy_run || return 1
-  no_shim_calls curl brew && [ "$(shim_calls git)" = "merge-base --is-ancestor $FAKE_COMMIT origin/main" ]
+  no_shim_calls curl brew && [ "$(shim_calls git)" = "$(printf '%s\n' \
+    "merge-base --is-ancestor $FAKE_COMMIT origin/main" "hash-object --no-filters -- $FROM/Casks/overtime.rb")" ]
 }
 
-missing_tap_file_puts_without_sha() {
+refuses_when_the_cask_cannot_be_hashed() {
+  local status
+  reset_shims
+  allow_gh
+  shim_allow_sub git hash-object 128
+  run_publish
+  status=$?
+  [ "$status" -eq 1 ] && [ "$(grep -c '^publish: ' "$PUBLISH_LOG")" = "1" ] \
+    && grep '^publish: refused: ' "$PUBLISH_LOG" | grep -qF -- "blob id" && [ -z "$(shim_calls gh)" ] \
+    || { printf 'exit %s\n' "$status"; cat "$PUBLISH_LOG"; shim_calls gh; return 1; }
+}
+
+same_cask_on_main_skips_the_put() {
+  local blob
+  reset_shims
+  blob="$("$REAL_GIT" hash-object --no-filters -- "$FROM/Casks/overtime.rb")" || return 1
+  shim_allow_sub gh release 0
+  shim_allow_sub gh api 0 "$blob"
+  run_publish || { cat "$PUBLISH_LOG"; return 1; }
+  ! shim_calls gh | grep -q '^api -X PUT ' \
+    && [ "$(cat "$PUBLISH_LOG")" = "$(printf '%s\n' 'publish: draft created' 'publish: assets uploaded' \
+      'publish: published as latest' 'publish: cask already current')" ] \
+    || { cat "$PUBLISH_LOG"; shim_calls gh; return 1; }
+}
+
+missing_cask_puts_without_sha() {
   reset_shims
   shim_allow_sub gh release 0
   shim_allow_sub gh api 1
@@ -186,13 +211,13 @@ fails_at() {
   [ "$status" -eq 1 ] && grep -q '^publish: failed: ' "$PUBLISH_LOG" || { printf 'exit %s\n' "$status"; cat "$PUBLISH_LOG"; return 1; }
 }
 
-upload_failure_stops_before_edit_and_tap() {
+upload_failure_stops_before_edit_and_cask() {
   fails_at release upload || return 1
   ! shim_calls gh | grep -q '^release edit ' && ! shim_calls gh | grep -q '^api ' \
     && ! grep -q 'publish: assets uploaded' "$PUBLISH_LOG"
 }
 
-edit_failure_stops_before_the_tap() {
+edit_failure_stops_before_the_cask() {
   fails_at release edit || return 1
   ! shim_calls gh | grep -q '^api ' && ! grep -q 'publish: published as latest' "$PUBLISH_LOG"
 }
@@ -204,7 +229,7 @@ create_failure_stops_before_upload() {
 
 put_failure_exits_one() {
   fails_at api -X || return 1
-  ! grep -q 'publish: tap updated' "$PUBLISH_LOG" && shim_calls gh | grep -q '^release edit '
+  ! grep -q 'publish: cask updated' "$PUBLISH_LOG" && shim_calls gh | grep -q '^release edit '
 }
 
 usage_without_from() {
@@ -245,17 +270,20 @@ check "a commit that is not on origin/main: refused" refuses_not_on_main
 check "a missing asset: refused" refuses_with_from "$MISSING" "missing dist/appcast.xml"
 check "one changed byte in the zip fails SHA256SUMS: refused" refuses_with_from "$CHANGED" "does not match"
 check "a cask whose sha256 is not the zip's: refused" refuses_with_from "$WRONG_CASK" "sha256 is not the zip"
-check "no HOMEBREW_TAP_TOKEN: refused" refuses "HOMEBREW_TAP_TOKEN" -u HOMEBREW_TAP_TOKEN
 check "an empty GH_TOKEN: refused" refuses "GH_TOKEN" GH_TOKEN=
+check "no GH_REPO: refused" refuses "GH_REPO" -u GH_REPO
+check "a GH_REPO that is not owner/name: refused" refuses "not owner/name" GH_REPO=overtime
+check "a cask git cannot hash: refused before any gh call" refuses_when_the_cask_cannot_be_hashed
 check "no --from: usage exit 64" usage_without_from
-check "happy path: draft, upload, latest, tap read, tap write, nothing else" happy_path_calls_gh_in_order_and_nothing_else
+check "happy path: draft, upload, latest, cask read, cask write to main, nothing else" happy_path_calls_gh_in_order_and_nothing_else
 check "happy path: exactly the DMG, the zip, appcast.xml and SHA256SUMS are uploaded" happy_path_uploads_exactly_the_four_assets
 check "happy path: the four step lines in order" happy_path_prints_the_steps_in_order
-check "release calls carry the release token, tap calls the tap token" release_calls_use_the_release_token_and_tap_calls_the_tap_token
+check "every gh call carries the workflow token" every_gh_call_carries_the_workflow_token
 check "no token value in the output or on any command line" tokens_never_appear_in_output_or_arguments
-check "no curl, no brew, and git only for the ancestry check" no_curl_brew_or_git_write
-check "no tap file yet: the PUT carries no sha" missing_tap_file_puts_without_sha
+check "no curl, no brew, and git only for the ancestry check and the cask's blob id" no_curl_brew_or_git_write
+check "no cask on main yet: the PUT carries no sha" missing_cask_puts_without_sha
+check "the same cask already on main: no PUT, and the run says so" same_cask_on_main_skips_the_put
 check "a failed create stops before the upload" create_failure_stops_before_upload
-check "a failed upload stops before the edit and the tap" upload_failure_stops_before_edit_and_tap
-check "a failed edit stops before the tap" edit_failure_stops_before_the_tap
-check "a failed tap PUT exits 1" put_failure_exits_one
+check "a failed upload stops before the edit and the cask" upload_failure_stops_before_edit_and_cask
+check "a failed edit stops before the cask" edit_failure_stops_before_the_cask
+check "a failed cask PUT exits 1" put_failure_exits_one

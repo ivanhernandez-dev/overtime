@@ -21,8 +21,17 @@ struct ReleaseSourceGateTests {
   static let loginItemAdapter = "Sources/Overtime/Adapters/SMAppServiceLoginItem.swift"
   static let uninstallAdapter = "Sources/Overtime/Adapters/LiveUninstallSystem.swift"
   static let releaseSecrets: Set<String> = [
-    "T1_P12_BASE64", "T1_P12_PASSWORD", "SPARKLE_ED_PRIVATE_KEY", "HOMEBREW_TAP_TOKEN",
+    "T1_P12_BASE64", "T1_P12_PASSWORD", "SPARKLE_ED_PRIVATE_KEY",
   ]
+  static let removedTapSecret = "HOMEBREW_" + "TAP_TOKEN"
+  static let publishStep =
+    [
+      "      - name: Publish the release, then update the cask",
+      "        env:",
+      "          GH_TOKEN: ${{ github.token }}",
+      "          GH_REPO: ${{ github.repository }}",
+      #"        run: /bin/bash scripts/release/publish.sh --from "$RUNNER_TEMP/release""#,
+    ].joined(separator: "\n") + "\n"
   static let mainAppService = ["SMAppService", "mainApp"].joined(separator: ".")
   static let caskUninstallLine = #"uninstall quit: "io.github.ivanhernandez-dev.overtime""#
   static let pinnedAction = #"^[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40}$"#
@@ -874,7 +883,7 @@ struct ReleaseSourceGateTests {
   }
 
   @Test(arguments: [
-    (ciWorkflow, "          TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}"),
+    (ciWorkflow, "          TOKEN: ${{ secrets.PLANTED_TOKEN }}"),
     (ciWorkflow, "          GH_TOKEN: ${{ github.token }}"),
   ])
   func theSecretGateCatchesACredentialInCI(path: String, line: String) throws {
@@ -927,6 +936,21 @@ struct ReleaseSourceGateTests {
     let leaky = try Self.replacing(
       try Self.workflows(), in: Self.releaseWorkflow, anchor,
       with: anchor + "\n          OTHER: ${{ secrets.OTHER_TOKEN }}")
+    Self.expectOne(Self.secretFindings(leaky), naming: Self.releaseWorkflow)
+  }
+
+  @Test func thePublishStepUsesOnlyTheWorkflowTokenAndNamesItsRepository() throws {
+    let release = try Self.read(Self.releaseWorkflow).text
+    #expect(release.contains(Self.publishStep))
+    #expect(release.components(separatedBy: "scripts/release/publish.sh").count == 2)
+  }
+
+  @Test func theSecretGateCatchesTheRemovedTapSecretInRelease() throws {
+    #expect(!Self.releaseSecrets.contains(Self.removedTapSecret))
+    let anchor = "          GH_REPO: ${{ github.repository }}"
+    let leaky = try Self.replacing(
+      try Self.workflows(), in: Self.releaseWorkflow, anchor,
+      with: anchor + "\n          \(Self.removedTapSecret): ${{ secrets.\(Self.removedTapSecret) }}")
     Self.expectOne(Self.secretFindings(leaky), naming: Self.releaseWorkflow)
   }
 
@@ -1461,12 +1485,12 @@ struct ReleaseSourceGateTests {
   }
 
   static let cutPushEnvironment = "          VERSION: ${{ inputs.version }}\n        run: git push"
-  static let tapSecretLine = "          TAP: ${{ secrets.HOMEBREW_TAP_TOKEN }}\n"
+  static let plantedSecretLine = "          PLANTED: ${{ secrets.PLANTED_TOKEN }}\n"
   static let cutTimeout = "    timeout-minutes: 15\n"
   static let cutCredentials = "          persist-credentials: true\n"
 
   @Test(arguments: [
-    (cutPushEnvironment, "          VERSION: ${{ inputs.version }}\n" + tapSecretLine + "        run: git push"),
+    (cutPushEnvironment, "          VERSION: ${{ inputs.version }}\n" + plantedSecretLine + "        run: git push"),
     (cutTimeout, cutTimeout + "    env:\n      GH_TOKEN: ${{ github.token }}\n"),
     (cutTimeout, cutTimeout + "    env:\n      ALL: ${{ toJSON(secrets) }}\n"),
     (cutCredentials, cutCredentials + "          token: ${{ github.token }}\n"),

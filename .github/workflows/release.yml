@@ -74,11 +74,10 @@ jobs:
           /bin/bash scripts/release/release.sh --identity "$T1_IDENTITY_SHA1" --version "${GITHUB_REF_NAME#v}" \
             --out "$RUNNER_TEMP/release"
 
-      - name: Publish the release, then update the tap
+      - name: Publish the release, then update the cask
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: /bin/bash scripts/release/publish.sh --from "$RUNNER_TEMP/release"
 
       - name: Delete the temporary keychain
