@@ -2,6 +2,13 @@
 
 All notable changes to Overtime are listed here, in the Keep a Changelog format, and versions follow Semantic Versioning.
 
+## [Unreleased]
+
+### Fixed
+
+- The iPhone hotspot setup step no longer cuts off its last line.
+- The setup guide's window is taller, so every step shows all of its content without scrolling, including the four notes of Unplug protection and the "Sleep is turned off system-wide" row of Recommended macOS settings.
+
 ## [1.0.1] - 2026-10-17
 
 ### Added
