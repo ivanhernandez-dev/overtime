@@ -68,8 +68,8 @@ targets:
         LSMinimumSystemVersion: "14.0"
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        NSLocationUsageDescription: "Overtime uses Location only to find and join your iPhone hotspot when the network stops working with the lid closed. It never stores or sends your location."
-        NSLocationWhenInUseUsageDescription: "Overtime uses Location only to find and join your iPhone hotspot when the network stops working with the lid closed. It never stores or sends your location."
+        NSLocationUsageDescription: "Since macOS 14.4, apps can see the names of nearby Wi-Fi networks only with Location access. Overtime uses it only to find and join your iPhone hotspot when the network stops working with the lid closed. It never reads where you are, and never stores or sends your location."
+        NSLocationWhenInUseUsageDescription: "Since macOS 14.4, apps can see the names of nearby Wi-Fi networks only with Location access. Overtime uses it only to find and join your iPhone hotspot when the network stops working with the lid closed. It never reads where you are, and never stores or sends your location."
         SUFeedURL: https://github.com/ivanhernandez-dev/overtime/releases/latest/download/appcast.xml
         SUPublicEDKey: $(SPARKLE_PUBLIC_ED_KEY)
         SUEnableAutomaticChecks: true

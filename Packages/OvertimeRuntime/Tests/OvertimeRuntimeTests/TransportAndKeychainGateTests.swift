@@ -52,25 +52,67 @@ struct TransportAndKeychainGateTests {
     #expect(specFindings.contains("\(Self.projectSpec) NSAllowsArbitraryLoads"))
   }
 
-  static func locationPurposeFindings(plist: String) throws -> [String] {
+  static let locationPurposeKeys = ["NSLocationUsageDescription", "NSLocationWhenInUseUsageDescription"]
+  static let locationPurposePhrases = [
+    "Since macOS 14.4", "find and join your iPhone hotspot", "never reads where you are",
+    "never stores or sends your location",
+  ]
+
+  static func locationPurposeFindings(plist: String, spec: String) throws -> [String] {
     let parsed = try PropertyListSerialization.propertyList(from: Data(plist.utf8), options: [], format: nil)
     let dictionary = try #require(parsed as? [String: Any])
     var findings: [String] = []
-    for key in ["NSLocationUsageDescription", "NSLocationWhenInUseUsageDescription"] {
-      let text = dictionary[key] as? String ?? ""
-      for phrase in ["find and join your iPhone hotspot", "never stores or sends your location"]
-      where !text.contains(phrase) {
+    let texts = locationPurposeKeys.map { dictionary[$0] as? String ?? "" }
+    for (key, text) in zip(locationPurposeKeys, texts) {
+      for phrase in locationPurposePhrases where !text.contains(phrase) {
         findings.append("\(key) lacks \(phrase)")
       }
+      if !text.isEmpty, !spec.contains(text) {
+        findings.append("\(key) differs from \(projectSpec)")
+      }
+    }
+    if Set(texts).count != 1 {
+      findings.append("the two purpose strings differ")
     }
     return findings
   }
 
-  @Test func bothLocationPurposeStringsSayWhatLocationIsForAndThatItIsNeverStoredOrSent() throws {
+  @Test func bothLocationPurposeStringsSayWhyMacOSAsksWhatOvertimeDoesAndWhatItNeverDoes() throws {
     let plist = try Self.repositoryFile(Self.infoPlist)
-    #expect(try Self.locationPurposeFindings(plist: plist) == [])
-    let stale = plist.replacingOccurrences(of: "It never stores or sends your location.", with: "")
-    #expect(try Self.locationPurposeFindings(plist: stale).count == 2)
+    let spec = try Self.repositoryFile(Self.projectSpec)
+    #expect(try Self.locationPurposeFindings(plist: plist, spec: spec) == [])
+    let closing = "It never reads where you are, and never stores or sends your location."
+    let stalePlist = plist.replacingOccurrences(of: closing, with: "")
+    let staleSpec = spec.replacingOccurrences(of: closing, with: "")
+    #expect(try Self.locationPurposeFindings(plist: stalePlist, spec: staleSpec).count == 4)
+  }
+
+  static let whereTheMacIsTokens = [
+    "startUpdatingLocation", "requestLocation(", "startMonitoringSignificantLocationChanges", "startMonitoringVisits",
+    "startMonitoring(for", "CLLocationUpdate", "CLMonitor", "CLGeocoder", ".location?.coordinate", "manager.location",
+  ]
+  static let locationReader = "Sources/Overtime/Adapters/LocationStatusReader.swift"
+
+  static func whereTheMacIsFindings(in files: [SourceFile]) -> [String] {
+    files.flatMap { file in
+      file.text.components(separatedBy: "\n").enumerated().flatMap { index, line in
+        whereTheMacIsTokens.filter { line.contains($0) }.map { "\(file.path):\(index + 1) \($0)" }
+      }
+    }
+  }
+
+  @Test func noSourceAsksMacOSWhereTheMacIs() throws {
+    let files = try NetworkSourceGateTests.corpus()
+    #expect(files.count > 100)
+    #expect(Self.whereTheMacIsFindings(in: files) == [])
+    let reader = try #require(files.first { $0.path == Self.locationReader })
+    #expect(reader.text.contains("requestWhenInUseAuthorization()"))
+    let plantedLine = "\n    manager.startUpdatingLocation()\n"
+    let planted = files.map { file in
+      file.path == reader.path ? SourceFile(path: file.path, text: file.text + plantedLine) : file
+    }
+    #expect(Self.whereTheMacIsFindings(in: planted).count == 1)
+    #expect(Self.whereTheMacIsFindings(in: planted).first?.hasPrefix(reader.path + ":") == true)
   }
 
   static let keychainPatterns: [(name: String, pattern: String)] = [

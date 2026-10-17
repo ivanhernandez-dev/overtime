@@ -83,13 +83,13 @@ Overtime is signed with its own certificate, not an Apple Developer ID, so macOS
 
 ## First run and permissions
 
-The first time Overtime opens, a short guide sets it up in seven steps: Welcome to Overtime, Start at login, Notifications, Location (optional), Check your setup, Unplug protection (optional), and Test keep-awake. The last step checks that keep-awake works on this Mac. You can change each choice later in Settings.
+The first time Overtime opens, a short guide sets it up in seven steps: Welcome to Overtime, Launch at login, Notifications, iPhone hotspot (optional), Recommended macOS settings, Unplug protection (optional), and Setup complete. On the last step there is nothing left to do: Overtime checks on its own that it can keep this Mac awake, and the result appears under Self-test in Settings > Diagnostics. You can change each choice later in Settings.
 
 | Permission | What it is for |
 |---|---|
-| Start at login | Overtime has to be running to keep the Mac awake. The first launch turns Launch at login on, and you can turn it off in Settings > General. |
+| Launch at login | Overtime has to be running to keep the Mac awake. The first launch turns Launch at login on, and you can turn it off in Settings > General. |
 | Notifications | Only when you need to act. There are five kinds: Keep-awake failed, Battery floor, Battery low when Claude starts, Lid-closed summary, and the Keep Awake reminder. You can turn each one off in Settings > General. |
-| Location | Only to find and join your iPhone hotspot when the network stops working with the lid closed. Overtime never stores or sends your location, and hotspot failover works without it. |
+| Location | Optional, and only for hotspot failover: setup asks for it only after you choose your iPhone hotspot. Since macOS 14.4, apps can see the names of nearby Wi-Fi networks only with Location access. Overtime uses it only to find and join your iPhone hotspot when the network stops working with the lid closed, never reads where you are, and never stores or sends your location. Failover works without it, but joining the hotspot is less likely to succeed. |
 | Background item (Unplug Protection) | Installs the optional helper after you approve it under Allow in the Background. See [Unplug Protection](#unplug-protection). |
 
 <p align="center">
@@ -137,7 +137,7 @@ Settings has seven panes, in this order:
 - **Release.** The Mac sleeps about three minutes after Claude's last activity: the 2-minute Transcript window plus the 1-minute Release grace, both in Settings > Detection. With the lid closed and no external display, Overtime checks about 30 seconds after letting go that the Mac went to sleep, and asks for sleep if it didn't.
 - **Stay out of the way.** With the lid closed and no external display, the display turns off so the screen locks; an external display is never turned off, and you can keep the display on with "Keep display on while Claude works". On battery, Overtime lets go at 10% and holds again on power or at 20%, both in Settings > Battery. Apple menu > Sleep works as usual with the lid open, and Sleep Now and Pause in the panel always let the Mac sleep.
 
-Network failover is off until you choose your iPhone hotspot in Settings > Network or turn on Auto-detect iPhone hotspot. It acts only with the lid closed while Claude works. It checks every 10 seconds, asking api.anthropic.com and then captive.apple.com, with no cookies and no cache. After 3 failed checks it joins the hotspot, and it switches back to your usual network when you open the lid.
+Network failover is off until you choose your iPhone hotspot, during setup or in Settings > Network, or turn on Auto-detect iPhone hotspot. It acts only with the lid closed while Claude works. It checks every 10 seconds, asking api.anthropic.com and then captive.apple.com, with no cookies and no cache. After 3 failed checks it joins the hotspot, and it switches back to your usual network when you open the lid.
 
 The design decisions, with the evidence behind each, are in [`docs/adr/`](docs/adr/).
 
@@ -168,7 +168,7 @@ Overtime collects no telemetry.
 - the list of your own running processes, to spot Claude Code sessions;
 - when the transcripts in its folders were last written, and the first 64 KB of each transcript, only to read which kind of client wrote it;
 - the power state: lid, battery, charger, displays and idle time;
-- for network failover only: the Wi-Fi interface, the router address and your known networks, and with Location allowed, the current network.
+- for network failover only: the Wi-Fi interface, the router address and your known networks, and, with Location allowed, a scan for nearby networks with your hotspot's name.
 
 **What it sends:** two kinds of requests, and nothing about you or your work.
 

@@ -23,9 +23,9 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSLocationUsageDescription</key>
-	<string>Overtime uses Location only to find and join your iPhone hotspot when the network stops working with the lid closed. It never stores or sends your location.</string>
+	<string>Since macOS 14.4, apps can see the names of nearby Wi-Fi networks only with Location access. Overtime uses it only to find and join your iPhone hotspot when the network stops working with the lid closed. It never reads where you are, and never stores or sends your location.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Overtime uses Location only to find and join your iPhone hotspot when the network stops working with the lid closed. It never stores or sends your location.</string>
+	<string>Since macOS 14.4, apps can see the names of nearby Wi-Fi networks only with Location access. Overtime uses it only to find and join your iPhone hotspot when the network stops working with the lid closed. It never reads where you are, and never stores or sends your location.</string>
 	<key>SUAutomaticallyUpdate</key>
 	<false/>
 	<key>SUEnableAutomaticChecks</key>
