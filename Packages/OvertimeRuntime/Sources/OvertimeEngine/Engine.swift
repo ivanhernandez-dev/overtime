@@ -39,6 +39,8 @@ public struct EngineSources: Sendable {
   public var sleepDisabled: (@Sendable () -> Bool?)?
   public var osBuild: (@Sendable () -> String?)?
   public var networkSettings: (@Sendable (Settings) -> Void)?
+  public var temperatureRead: (@Sendable () -> BatteryTemperatureReading)?
+  public var temperatureStream: (@Sendable () -> AsyncStream<BatteryTemperatureReading>)?
 
   public init(
     transcriptSeed: @escaping @Sendable () -> [TranscriptActivity],
@@ -59,8 +61,12 @@ public struct EngineSources: Sendable {
     stuckWindow: StuckWindowBox? = nil,
     sleepDisabled: (@Sendable () -> Bool?)? = nil,
     osBuild: (@Sendable () -> String?)? = nil,
-    networkSettings: (@Sendable (Settings) -> Void)? = nil
+    networkSettings: (@Sendable (Settings) -> Void)? = nil,
+    temperatureRead: (@Sendable () -> BatteryTemperatureReading)? = nil,
+    temperatureStream: (@Sendable () -> AsyncStream<BatteryTemperatureReading>)? = nil
   ) {
+    self.temperatureRead = temperatureRead
+    self.temperatureStream = temperatureStream
     self.networkSettings = networkSettings
     self.sleepDisabled = sleepDisabled
     self.osBuild = osBuild
@@ -170,6 +176,7 @@ public actor Engine {
       await reportRootHealth(rootHealth)
     }
     await readPowerOnce()
+    await readTemperatureOnce()
     await step(.tick(await withCoexistence(sources.sampleTick())))
   }
 
@@ -178,6 +185,7 @@ public actor Engine {
       await launch()
       await seedTranscripts(sources.transcriptSeed)
       await readPowerOnce()
+      await readTemperatureOnce()
       await startTranscripts()
       let task = Task { await self.runLoops() }
       runTask = task
@@ -673,6 +681,10 @@ public actor Engine {
     await step(.power(reading))
   }
 
+  public func stepTemperature(_ reading: BatteryTemperatureReading) async {
+    await step(.batteryTemperature(reading))
+  }
+
   public func apply(settings new: Settings) async -> Bool {
     guard SettingsStore.validationProblem(new) == nil, new.validated().adjustments.isEmpty else { return false }
     let old = settings
@@ -692,8 +704,16 @@ public actor Engine {
     )
     let thresholdsChanged =
       old.batteryLowPercent != new.batteryLowPercent || old.batteryResumePercent != new.batteryResumePercent
+      || old.batteryProtectionEnabled != new.batteryProtectionEnabled
+      || old.helperBatteryFloorPercent != new.helperBatteryFloorPercent
     if thresholdsChanged, let lastPower {
       await step(.power(lastPower))
+    }
+    let temperatureChanged =
+      old.temperatureProtectionEnabled != new.temperatureProtectionEnabled
+      || old.temperatureReleaseCelsius != new.temperatureReleaseCelsius
+    if temperatureChanged, let reading = state.temperature.reading {
+      await step(.batteryTemperature(reading))
     }
     if rootsChanged(from: old, to: new) {
       return await applyRoots(replacing: old)
@@ -713,6 +733,12 @@ public actor Engine {
     if old.keepDisplayOn != new.keepDisplayOn { keys.append("keepDisplayOn") }
     if old.hotspot != new.hotspot { keys.append("hotspot") }
     if old.hotspotAutoDetect != new.hotspotAutoDetect { keys.append("hotspotAutoDetect") }
+    if old.batteryProtectionEnabled != new.batteryProtectionEnabled { keys.append("batteryProtectionEnabled") }
+    if old.helperBatteryFloorPercent != new.helperBatteryFloorPercent { keys.append("helperBatteryFloorPercent") }
+    if old.temperatureProtectionEnabled != new.temperatureProtectionEnabled {
+      keys.append("temperatureProtectionEnabled")
+    }
+    if old.temperatureReleaseCelsius != new.temperatureReleaseCelsius { keys.append("temperatureReleaseCelsius") }
     return keys.sorted()
   }
 
@@ -740,8 +766,19 @@ public actor Engine {
     }
   }
 
+  private func readTemperatureOnce() async {
+    guard let temperatureRead = sources.temperatureRead else { return }
+    switch await deadlineRunner.perform(timeout: sampleTimeoutSeconds, key: "temperature", temperatureRead) {
+    case .value(let reading):
+      await stepTemperature(reading)
+    case .timedOut:
+      await stepTemperature(.unreadable)
+    }
+  }
+
   private func runLoops() async {
     let power = sources.powerStream?()
+    let temperature = sources.temperatureStream?()
     let systemPower = sources.systemPowerStream?()
     let network = interpreter.networkEvents
     await withTaskGroup(of: Void.self) { group in
@@ -763,6 +800,13 @@ public actor Engine {
         group.addTask {
           for await reading in power {
             await self.stepPower(reading)
+          }
+        }
+      }
+      if let temperature {
+        group.addTask {
+          for await reading in temperature {
+            await self.stepTemperature(reading)
           }
         }
       }

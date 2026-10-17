@@ -19,19 +19,26 @@ public struct PowerSourceDescription: Sendable, Equatable {
 public final class PowerSourceMonitor: @unchecked Sendable {
   private let pollSeconds: Double
   private let reader: @Sendable () -> PowerReading?
+  private let temperatureReader: @Sendable () -> BatteryTemperatureReading
   private let queue = DispatchQueue(label: "io.github.ivanhernandez-dev.overtime.power-source-monitor")
   private var token: Int32 = NOTIFY_TOKEN_INVALID
   private var timer: (any DispatchSourceTimer)?
   private var continuation: AsyncStream<PowerReading?>.Continuation?
   private var lastPublished: PowerReading??
+  private var powerGeneration = 0
+  private var temperatureContinuation: AsyncStream<BatteryTemperatureReading>.Continuation?
+  private var lastTemperature: BatteryTemperatureReading?
+  private var temperatureGeneration = 0
   private var retainedSelf: PowerSourceMonitor?
 
   public init(
     pollSeconds: Double = Timing.batteryPollSeconds,
-    reader: @escaping @Sendable () -> PowerReading? = PowerSourceMonitor.readSystem
+    reader: @escaping @Sendable () -> PowerReading? = PowerSourceMonitor.readSystem,
+    temperatureReader: @escaping @Sendable () -> BatteryTemperatureReading = BatteryTemperatureReader.readSystem
   ) {
     self.pollSeconds = pollSeconds
     self.reader = reader
+    self.temperatureReader = temperatureReader
   }
 
   deinit {
@@ -40,10 +47,35 @@ public final class PowerSourceMonitor: @unchecked Sendable {
     }
     timer?.cancel()
     continuation?.finish()
+    temperatureContinuation?.finish()
   }
 
   public func read() -> PowerReading? {
     reader()
+  }
+
+  public func readTemperature() -> BatteryTemperatureReading {
+    temperatureReader()
+  }
+
+  public func startTemperatureReporting() -> AsyncStream<BatteryTemperatureReading> {
+    let (stream, continuation) = AsyncStream.makeStream(
+      of: BatteryTemperatureReading.self, bufferingPolicy: .bufferingNewest(16))
+    let previous: AsyncStream<BatteryTemperatureReading>.Continuation? = queue.sync {
+      let previous = temperatureContinuation
+      temperatureGeneration += 1
+      let generation = temperatureGeneration
+      continuation.onTermination = { [weak self] _ in
+        self?.endTemperature(generation)
+      }
+      temperatureContinuation = continuation
+      lastTemperature = nil
+      startSources()
+      publishTemperature()
+      return previous
+    }
+    previous?.finish()
+    return stream
   }
 
   public var isActive: Bool {
@@ -68,58 +100,115 @@ public final class PowerSourceMonitor: @unchecked Sendable {
   }
 
   public func startReporting() -> AsyncStream<PowerReading?> {
-    stop()
     let (stream, continuation) = AsyncStream.makeStream(of: PowerReading?.self, bufferingPolicy: .bufferingNewest(16))
-    continuation.onTermination = { [weak self] _ in
-      self?.stop()
-    }
-    queue.sync {
+    let previous: AsyncStream<PowerReading?>.Continuation? = queue.sync {
+      let previous = self.continuation
+      powerGeneration += 1
+      let generation = powerGeneration
+      continuation.onTermination = { [weak self] _ in
+        self?.endPower(generation)
+      }
       self.continuation = continuation
-      self.lastPublished = nil
-      self.retainedSelf = self
-      self.publish()
+      lastPublished = nil
+      startSources()
+      publishPower()
+      return previous
+    }
+    previous?.finish()
+    return stream
+  }
+
+  public func stop() {
+    let finished:
+      (
+        power: AsyncStream<PowerReading?>.Continuation?,
+        temperature: AsyncStream<BatteryTemperatureReading>.Continuation?
+      ) = queue.sync {
+        let current = (power: continuation, temperature: temperatureContinuation)
+        continuation = nil
+        lastPublished = nil
+        temperatureContinuation = nil
+        lastTemperature = nil
+        stopSources()
+        return current
+      }
+    finished.power?.finish()
+    finished.temperature?.finish()
+  }
+
+  private func endPower(_ generation: Int) {
+    queue.sync {
+      guard generation == powerGeneration, continuation != nil else { return }
+      continuation = nil
+      lastPublished = nil
+      if temperatureContinuation == nil {
+        stopSources()
+      }
+    }
+  }
+
+  private func endTemperature(_ generation: Int) {
+    queue.sync {
+      guard generation == temperatureGeneration, temperatureContinuation != nil else { return }
+      temperatureContinuation = nil
+      lastTemperature = nil
+      if continuation == nil {
+        stopSources()
+      }
+    }
+  }
+
+  private func startSources() {
+    retainedSelf = self
+    if token == NOTIFY_TOKEN_INVALID {
       var newToken = NOTIFY_TOKEN_INVALID
       let status = notify_register_dispatch(kIOPSNotifyAnyPowerSource, &newToken, queue) { [weak self] _ in
         self?.publish()
       }
       if status == NOTIFY_STATUS_OK {
-        self.token = newToken
+        token = newToken
       }
-      let interval = DispatchTimeInterval.nanoseconds(Int(clamping: Instant.nanoseconds(forSeconds: pollSeconds)))
-      let timer = DispatchSource.makeTimerSource(queue: queue)
-      timer.schedule(deadline: .now() + interval, repeating: interval, leeway: .milliseconds(500))
-      timer.setEventHandler { [weak self] in
-        self?.publish()
-      }
-      timer.resume()
-      self.timer = timer
     }
-    return stream
+    guard timer == nil else { return }
+    let interval = DispatchTimeInterval.nanoseconds(Int(clamping: Instant.nanoseconds(forSeconds: pollSeconds)))
+    let timer = DispatchSource.makeTimerSource(queue: queue)
+    timer.schedule(deadline: .now() + interval, repeating: interval, leeway: .milliseconds(500))
+    timer.setEventHandler { [weak self] in
+      self?.publish()
+    }
+    timer.resume()
+    self.timer = timer
   }
 
-  public func stop() {
-    let finished: AsyncStream<PowerReading?>.Continuation? = queue.sync {
-      if token != NOTIFY_TOKEN_INVALID {
-        notify_cancel(token)
-        token = NOTIFY_TOKEN_INVALID
-      }
-      timer?.cancel()
-      timer = nil
-      let current = continuation
-      continuation = nil
-      lastPublished = nil
-      retainedSelf = nil
-      return current
+  private func stopSources() {
+    if token != NOTIFY_TOKEN_INVALID {
+      notify_cancel(token)
+      token = NOTIFY_TOKEN_INVALID
     }
-    finished?.finish()
+    timer?.cancel()
+    timer = nil
+    retainedSelf = nil
   }
 
   private func publish() {
+    publishPower()
+    publishTemperature()
+  }
+
+  private func publishPower() {
     guard let continuation else { return }
     let reading = reader()
     if let lastPublished, lastPublished == reading { return }
     lastPublished = .some(reading)
     continuation.yield(reading)
+  }
+
+  private func publishTemperature() {
+    guard let temperatureContinuation else { return }
+    let reading = temperatureReader()
+    if let lastTemperature, lastTemperature == reading { return }
+    lastTemperature = reading
+    temperatureContinuation.yield(reading)
   }
 
   public static func classify(providingType: String?, sources: [PowerSourceDescription]) -> PowerReading {

@@ -121,6 +121,13 @@ public struct EngineSnapshot: Sendable, Equatable {
   public var helperEngaged: Bool
   public var helperFacts: HelperFacts?
   public var network: NetworkSummary?
+  public var batteryProtectionEnabled: Bool
+  public var helperBatteryFloorPercent: Int
+  public var temperatureBlocked: Bool
+  public var batteryTemperature: BatteryTemperatureReading?
+  public var temperatureProtectionEnabled: Bool
+  public var temperatureReleaseCelsius: Int
+  public var temperatureResumeCelsius: Int
 
   public var busyEndedAt: Instant? {
     events.busyEndedAt
@@ -157,8 +164,22 @@ public struct EngineSnapshot: Sendable, Equatable {
     osBuild: String? = nil,
     helperEngaged: Bool = false,
     helperFacts: HelperFacts? = nil,
-    network: NetworkSummary? = nil
+    network: NetworkSummary? = nil,
+    batteryProtectionEnabled: Bool = true,
+    helperBatteryFloorPercent: Int = Settings().helperBatteryFloorPercent,
+    temperatureBlocked: Bool = false,
+    batteryTemperature: BatteryTemperatureReading? = nil,
+    temperatureProtectionEnabled: Bool = true,
+    temperatureReleaseCelsius: Int = Settings().temperatureReleaseCelsius,
+    temperatureResumeCelsius: Int = Settings().temperatureResumeCelsius
   ) {
+    self.batteryProtectionEnabled = batteryProtectionEnabled
+    self.helperBatteryFloorPercent = helperBatteryFloorPercent
+    self.temperatureBlocked = temperatureBlocked
+    self.batteryTemperature = batteryTemperature
+    self.temperatureProtectionEnabled = temperatureProtectionEnabled
+    self.temperatureReleaseCelsius = temperatureReleaseCelsius
+    self.temperatureResumeCelsius = temperatureResumeCelsius
     self.network = network
     self.helperEngaged = helperEngaged
     self.helperFacts = helperFacts
@@ -228,7 +249,14 @@ public struct EngineSnapshot: Sendable, Equatable {
       osBuild: state.selfTest.osBuild,
       helperEngaged: Self.helperEngaged(state.helper.phase),
       helperFacts: state.helper.facts,
-      network: NetworkSummary.summary(state: state, settings: settings)
+      network: NetworkSummary.summary(state: state, settings: settings),
+      batteryProtectionEnabled: settings.batteryProtectionEnabled,
+      helperBatteryFloorPercent: settings.helperBatteryFloorPercent,
+      temperatureBlocked: state.temperature.blocked,
+      batteryTemperature: state.temperature.reading,
+      temperatureProtectionEnabled: settings.temperatureProtectionEnabled,
+      temperatureReleaseCelsius: settings.temperatureReleaseCelsius,
+      temperatureResumeCelsius: settings.temperatureResumeCelsius
     )
   }
 

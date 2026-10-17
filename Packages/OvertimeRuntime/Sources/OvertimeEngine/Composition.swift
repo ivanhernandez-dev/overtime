@@ -227,6 +227,7 @@ public enum Composition {
       }
     var transcriptStream: (@Sendable () -> AsyncStream<Event>)?
     var powerStream: (@Sendable () -> AsyncStream<PowerReading?>)?
+    var temperatureStream: (@Sendable () -> AsyncStream<BatteryTemperatureReading>)?
     var systemPowerStream: (@Sendable () -> AsyncStream<Event>)?
     var rebuildTranscripts: (@Sendable ([TranscriptRoot]) -> TranscriptSource)?
     if !once {
@@ -235,6 +236,7 @@ public enum Composition {
       let watcher = TranscriptWatcher(roots: roots, clock: clock, stuckWindow: stuckWindow, headers: headers)
       transcriptStream = { watcher.start() }
       powerStream = { powerMonitor.startReporting() }
+      temperatureStream = { powerMonitor.startTemperatureReporting() }
       if mode == .live {
         rebuildTranscripts = { roots in
           makeTranscriptSource(roots: roots, clock: clock, stuckWindow: stuckWindow, headers: headers)
@@ -275,7 +277,9 @@ public enum Composition {
       stuckWindow: stuckWindow,
       sleepDisabled: sleepDisabled ?? { registry.sleepDisabled() },
       osBuild: osBuild ?? { SystemInfo.osBuild() },
-      networkSettings: networkSettings
+      networkSettings: networkSettings,
+      temperatureRead: { powerMonitor.readTemperature() },
+      temperatureStream: temperatureStream
     )
     return Engine(
       mode: mode, settings: settings, clock: clock, interpreter: interpreter, sources: sources, heartbeat: heartbeat,
