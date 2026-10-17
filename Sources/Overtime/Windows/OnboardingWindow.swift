@@ -4,7 +4,7 @@ import SwiftUI
 
 struct OnboardingWindow: View {
   static let title = "Set Up Overtime"
-  static let contentSize = CGSize(width: 560, height: 440)
+  static let contentSize = CGSize(width: 560, height: 580)
   static let closeLabel = "Close Setup"
 
   let model: OnboardingModel

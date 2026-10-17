@@ -251,11 +251,11 @@ struct OnboardingWindowTests {
     #expect(fixture.stored.onboarding == nil)
   }
 
-  @Test func theWindowIsTitledSetUpOvertimeAt560By440AndCloses() throws {
+  @Test func theWindowIsTitledSetUpOvertimeAt560By580AndCloses() throws {
     let fixture = try Fixture()
     let controller = OnboardingWindow.controller(model: fixture.model)
     #expect(controller.title == "Set Up Overtime")
-    #expect(controller.contentSize == CGSize(width: 560, height: 440))
+    #expect(controller.contentSize == CGSize(width: 560, height: 580))
     #expect(AuxiliaryWindowController.styleMask == [.titled, .closable])
     #expect(controller.allowsClose)
     fixture.model.inFlight = .authorization
