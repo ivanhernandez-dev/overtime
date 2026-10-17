@@ -186,6 +186,20 @@ struct ReadmeScreenshotTests {
       kinds: [.closeButton])
     try record(welcome, stem: "onboarding-dark", into: folder, report: &report)
 
+    let hotspot = try OnboardingWindowTests.Fixture(location: .notDetermined, hotspot: .autoDetect, networks: [])
+    let hotspotSettings = hotspot.settings
+    hotspot.model.begin()
+    hotspot.walk(to: .location)
+    #expect(hotspot.model.currentStep == .location)
+    #expect(await waitUntil { hotspotSettings.knownNetworksRead })
+    #expect(hotspotSettings.hotspotCaption == nil)
+    #expect(hotspot.model.locationRow == LocationRow.for(.notDetermined))
+    #expect(hotspot.model.defaultButton.action == .allowLocation)
+    let location = try await activeCapture(
+      OnboardingWindow(model: hotspot.model), title: OnboardingWindow.title, size: OnboardingWindow.contentSize,
+      kinds: [.closeButton])
+    try record(location, stem: "onboarding-hotspot-dark", into: folder, report: &report)
+
     let setup = try OnboardingWindowTests.Fixture(login: .enabled)
     setup.model.begin()
     setup.walk(to: .selfTest)
@@ -201,8 +215,8 @@ struct ReadmeScreenshotTests {
 
     try report.text.write(to: folder.appendingPathComponent("checks.txt"), atomically: true, encoding: .utf8)
 
-    #expect(report.images.count == 6)
-    #expect(report.probes.count == 15)
+    #expect(report.images.count == 7)
+    #expect(report.probes.count == 17)
     #expect(report.controls.count == 2)
     for probe in report.probes {
       #expect(probe.measured.pass, "probe \(probe.stem) \(probe.measured.verdict)")
