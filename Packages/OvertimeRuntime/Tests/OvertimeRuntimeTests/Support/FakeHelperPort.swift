@@ -3,9 +3,16 @@ import OvertimeCore
 import OvertimeEngine
 import os
 
+extension HelperPort {
+  func engage() -> EffectOutcome {
+    engage(limits: HelperLimits(settings: Settings()))
+  }
+}
+
 final class FakeHelperPort: HelperPort {
   private struct Script: Sendable {
     var calls: [HelperAction] = []
+    var limits: [HelperLimits] = []
     var outcomes: [HelperAction: [EffectOutcome]] = [:]
     var held: Set<HelperAction> = []
     var requested = 0
@@ -25,6 +32,10 @@ final class FakeHelperPort: HelperPort {
 
   var calls: [HelperAction] {
     script.withLock { $0.calls }
+  }
+
+  var engageLimits: [HelperLimits] {
+    script.withLock { $0.limits }
   }
 
   var heldReturned: Int {
@@ -52,8 +63,9 @@ final class FakeHelperPort: HelperPort {
     }
   }
 
-  func engage() -> EffectOutcome {
-    perform(.engage)
+  func engage(limits: HelperLimits) -> EffectOutcome {
+    script.withLock { $0.limits.append(limits) }
+    return perform(.engage)
   }
 
   func release() -> EffectOutcome {

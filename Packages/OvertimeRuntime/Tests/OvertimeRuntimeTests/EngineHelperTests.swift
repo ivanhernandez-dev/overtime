@@ -231,7 +231,10 @@ final class SilentHelper: NSObject, NSXPCListenerDelegate, HelperXPCProtocol, @u
     return true
   }
 
-  func setSleepDisabled(_ enabled: Bool, reply: @escaping @Sendable (Int32, String) -> Void) {
+  func setSleepDisabled(
+    _ enabled: Bool, batteryFloorPercent: Int, temperatureCeilingCelsius: Int,
+    reply: @escaping @Sendable (Int32, String) -> Void
+  ) {
     counts.withLock { $0.sets.append(enabled) }
     held.withLockUnchecked { $0.append(reply) }
   }
@@ -270,13 +273,18 @@ final class ClearSwallowingHelper: NSObject, NSXPCListenerDelegate, HelperXPCPro
     return accepted
   }
 
-  func setSleepDisabled(_ enabled: Bool, reply: @escaping @Sendable (Int32, String) -> Void) {
+  func setSleepDisabled(
+    _ enabled: Bool, batteryFloorPercent: Int, temperatureCeilingCelsius: Int,
+    reply: @escaping @Sendable (Int32, String) -> Void
+  ) {
     guard enabled else {
       swallowed.withLock { $0 += 1 }
       held.withLockUnchecked { $0.append(reply) }
       return
     }
-    inner.setSleepDisabled(enabled, reply: reply)
+    inner.setSleepDisabled(
+      enabled, batteryFloorPercent: batteryFloorPercent, temperatureCeilingCelsius: temperatureCeilingCelsius,
+      reply: reply)
   }
 
   func status(appHelperVersion: Int, reply: @escaping @Sendable (Data) -> Void) {
@@ -329,12 +337,14 @@ struct EngineHelperTests {
 
     func engine(
       helper: any HelperPort, callTimeoutSeconds: Double = Timing.systemCallTimeoutSeconds,
-      stopWaitSeconds: Double = Engine.stopWaitSeconds
+      stopWaitSeconds: Double = Engine.stopWaitSeconds, settings: Settings = Settings()
     ) throws -> Engine {
       let clamshell = OrderedClamshellPort(inner: FakeClamshellPort(recorder: recorder), order: order)
+      var configured = settings
+      configured.transcriptRoots = [temp.path + "/projects"]
       return try Composition.makeLiveEngine(
         paths: paths,
-        settings: Settings(transcriptRoots: [temp.path + "/projects"]),
+        settings: configured,
         ports: LivePorts(
           assertions: FakeAssertionPort(), tools: tools, clamshell: clamshell, stateFile: paths.stateFile(.live),
           makeSentinel: { [recorder] in FakeSentinelPort(recorder: recorder) }, helper: helper),
@@ -390,10 +400,25 @@ struct EngineHelperTests {
     await OffPool.run { port.probe() }
   }
 
-  @Test func theAppStopsAskingTheHelperAtTheHelpersOwnBatteryFloor() {
-    #expect(
-      Settings().helperBatteryFloorPercent == HelperMachine.batteryFloorPercent,
-      "the app's intent treats a charge at or below the helper's floor as not ready, so the two must match")
+  @Test func theAppsHelperLimitsMatchTheHelpersCompiledLimits() {
+    let rule: Comment =
+      "the app's intent mirrors the helper's floor and ceiling and its editor offers the helper's ranges, so they must match"
+    #expect(Settings.helperBatteryFloorRange == HelperSafetyLimits.batteryFloorRange, rule)
+    #expect(Settings().helperBatteryFloorPercent == HelperSafetyLimits.defaultBatteryFloorPercent, rule)
+    #expect(Settings.temperatureReleaseRange == HelperSafetyLimits.temperatureCeilingRange, rule)
+    #expect(HelperIntent.helperTemperatureCeilingCelsius == HelperSafetyLimits.defaultTemperatureCeilingCelsius, rule)
+  }
+
+  @Test func theEngineSendsTheConfiguredLimitsToTheHelper() async throws {
+    let harness = try Harness()
+    let helper = InProcessHelper(order: harness.order)
+    defer { helper.stop() }
+    let port = XPCHelperPort(client: helper.client())
+    let engine = try harness.engine(
+      helper: port, settings: Settings(helperBatteryFloorPercent: 25, temperatureReleaseCelsius: 45))
+    await harness.engage(engine)
+    #expect(await engine.state.helper.phase == .engaged)
+    #expect(helper.fake.logLines.contains("set owned prior=0 floor=25 ceiling=45"))
   }
 
   @Test func withTheLidOpenTheEngineHoldsOnItsOwnAndALidCloseEngagesTheHelperAfterIt() async throws {
@@ -618,7 +643,7 @@ struct EngineHelperTests {
     #expect(await Self.run { port.engage() } == .timedOut)
     #expect(
       await OffPool.eventually { helper.fake.logLines.contains(InProcessHelper.connectionRelease) }, Self.holderRule)
-    #expect(helper.fake.logLines.contains("set owned prior=0"))
+    #expect(helper.fake.logLines.contains("set owned prior=0 floor=10 ceiling=45"))
     #expect(helper.fake.pmsetWrites == [true, false], Self.holderRule)
     #expect(helper.fake.sleepDisabled == false, Self.holderRule)
     #expect(helper.connectionsMade == 2)

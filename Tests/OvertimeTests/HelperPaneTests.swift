@@ -1018,7 +1018,7 @@ struct HelperPaneTests {
     await fixture.show(state)
     #expect(settings.helperInstalled == installed)
     #expect(BatteryPane.helperCaption == "Unplug protection also releases at 10% on its own. That limit is fixed.")
-    #expect(BatteryPane.helperCaption.contains("\(HelperMachine.batteryFloorPercent)%"))
+    #expect(BatteryPane.helperCaption.contains("\(HelperSafetyLimits.defaultBatteryFloorPercent)%"))
   }
 
   @Test(arguments: HelperUIState.allCases)

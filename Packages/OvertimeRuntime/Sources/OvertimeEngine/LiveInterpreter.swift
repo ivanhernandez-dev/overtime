@@ -14,7 +14,7 @@ public protocol SentinelPort: Sendable {
 extension SentinelLink: SentinelPort {}
 
 public protocol HelperPort: Sendable {
-  func engage() -> EffectOutcome
+  func engage(limits: HelperLimits) -> EffectOutcome
   func release() -> EffectOutcome
   func heartbeat() -> EffectOutcome
 }
@@ -22,7 +22,7 @@ public protocol HelperPort: Sendable {
 public struct NoHelperPort: HelperPort {
   public init() {}
 
-  public func engage() -> EffectOutcome {
+  public func engage(limits: HelperLimits) -> EffectOutcome {
     .failed(code: LiveInterpreter.helperUnavailableCode)
   }
 
@@ -307,18 +307,19 @@ public final class LiveInterpreter: EffectInterpreter {
         results.append(.effectResult(id, await pmset(Self.sleepArguments, wall: wall)))
       case .net:
         continue
-      case .helper(let action, let id, _):
-        results.append(.effectResult(id, await helper(action)))
+      case .helper(let action, let id, let limits):
+        results.append(.effectResult(id, await helper(action, limits: limits)))
       }
     }
     return results
   }
 
-  private func helper(_ action: HelperAction) async -> EffectOutcome {
+  private func helper(_ action: HelperAction, limits: HelperLimits?) async -> EffectOutcome {
     let port = ports.helper
+    let engageLimits = limits ?? HelperLimits(settings: Settings())
     let outcome = await runner.perform(timeout: callTimeoutSeconds, key: Self.helperRunnerKey) { () -> EffectOutcome in
       switch action {
-      case .engage: port.engage()
+      case .engage: port.engage(limits: engageLimits)
       case .release: port.release()
       case .heartbeat: port.heartbeat()
       }

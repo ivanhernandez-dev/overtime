@@ -7,7 +7,7 @@ struct BatteryPane: View {
     "On battery at or below this level, Overtime stops keeping the Mac awake so it can sleep."
   static let resumeCaption = "Overtime resumes on power, or when the battery reaches this level."
   static let helperCaption =
-    "Unplug protection also releases at \(HelperMachine.batteryFloorPercent)% on its own. That limit is fixed."
+    "Unplug protection also releases at \(HelperSafetyLimits.defaultBatteryFloorPercent)% on its own. That limit is fixed."
 
   let model: SettingsModel
 

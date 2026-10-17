@@ -171,6 +171,15 @@ struct HelperPortTests {
     #expect(harness.order.all == ["helper engage", "clamshell off"])
   }
 
+  @Test func theInterpreterPassesTheEffectsLimitsToThePort() async throws {
+    let harness = try Harness()
+    let interpreter = harness.interpreter(helper: harness.helper)
+    let limits = HelperLimits(batteryFloorPercent: 25, temperatureCeilingCelsius: nil)
+    let engage = await Self.perform(interpreter, [.helper(.engage, id: EffectID(value: 1), limits: limits)])
+    #expect(engage == [.effectResult(EffectID(value: 1), .succeeded)])
+    #expect(harness.helper.engageLimits == [limits])
+  }
+
   @Test func theShadowInterpreterAnswersHelperEffectsWithSuccess() async throws {
     let harness = try Harness()
     let interpreter = RecordingInterpreter(logger: harness.logger, timeZone: TimeZone(secondsFromGMT: 0) ?? .gmt)

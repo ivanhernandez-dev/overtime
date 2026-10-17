@@ -23,9 +23,15 @@ struct HelperXPCTests {
   struct Remote: Sendable {
     let client: HelperXPCClient
 
-    func set(_ enabled: Bool) async -> HelperCallResult<HelperReply> {
+    func set(
+      _ enabled: Bool, batteryFloorPercent: Int = HelperSafetyLimits.notGiven,
+      temperatureCeilingCelsius: Int = HelperSafetyLimits.notGiven
+    ) async -> HelperCallResult<HelperReply> {
       let client = client
-      return await OffPool.run { client.set(enabled) }
+      return await OffPool.run {
+        client.set(
+          enabled, batteryFloorPercent: batteryFloorPercent, temperatureCeilingCelsius: temperatureCeilingCelsius)
+      }
     }
 
     func status(appVersion: Int) async -> HelperCallResult<HelperStatus> {
@@ -176,7 +182,10 @@ struct HelperXPCTests {
       return true
     }
 
-    func setSleepDisabled(_ enabled: Bool, reply: @escaping @Sendable (Int32, String) -> Void) {
+    func setSleepDisabled(
+      _ enabled: Bool, batteryFloorPercent: Int, temperatureCeilingCelsius: Int,
+      reply: @escaping @Sendable (Int32, String) -> Void
+    ) {
       switch script {
       case .silent: held.withLockUnchecked { $0.append(reply) }
       case .garbage: reply(9, "unknown")
@@ -231,7 +240,10 @@ struct HelperXPCTests {
     let answer = await OffPool.bounded(seconds: 5) { () -> HelperReply? in
       let box = OSAllocatedUnfairLock<HelperReply?>(initialState: nil)
       let done = DispatchSemaphore(value: 0)
-      service.setSleepDisabled(enabled) { code, message in
+      service.setSleepDisabled(
+        enabled, batteryFloorPercent: HelperSafetyLimits.notGiven,
+        temperatureCeilingCelsius: HelperSafetyLimits.notGiven
+      ) { code, message in
         box.withLock { $0 = HelperReplyCode(rawValue: code).map { HelperReply(code: $0, message: message) } }
         done.signal()
       }
@@ -270,7 +282,7 @@ struct HelperXPCTests {
     }
     #expect(status.owns)
     #expect(status.engaged)
-    #expect(status.helperVersion == 1)
+    #expect(status.helperVersion == HelperIdentity.version)
     #expect(status.sleepDisabled == true)
     #expect(status.prior == false)
     #expect(status.batteryPercent == 80)
@@ -316,14 +328,14 @@ struct HelperXPCTests {
     #expect(harness.connectionsMade == 0)
     #expect(harness.connections == 0)
     _ = await client.set(true)
-    _ = await client.status(appVersion: 1)
-    _ = await client.status(appVersion: 1)
+    _ = await client.status(appVersion: HelperIdentity.version)
+    _ = await client.status(appVersion: HelperIdentity.version)
     _ = await client.set(false)
     #expect(harness.connectionsMade == 1)
     #expect(harness.connections == 1)
     client.invalidate()
     #expect(await OffPool.eventually { harness.connections == 0 })
-    #expect(!Self.isFailed(await client.status(appVersion: 1)))
+    #expect(!Self.isFailed(await client.status(appVersion: HelperIdentity.version)))
     #expect(harness.connectionsMade == 2)
     #expect(harness.connections == 1)
   }
@@ -360,7 +372,7 @@ struct HelperXPCTests {
     let other = harness.client()
     defer { other.invalidate() }
     #expect(await holder.set(true) == .success(HelperReply(code: .owned, message: "owned")))
-    #expect(Self.engagedStatus(await other.status(appVersion: 1)) == true)
+    #expect(Self.engagedStatus(await other.status(appVersion: HelperIdentity.version)) == true)
     #expect(harness.connections == 2)
     harness.fake.forget()
     holder.invalidate()
@@ -370,7 +382,7 @@ struct HelperXPCTests {
     #expect(harness.fake.sleepDisabled == false, Self.holderRule)
     #expect(harness.fake.storedRecord?.owns == false, Self.holderRule)
     #expect(await OffPool.eventually { harness.connections == 1 })
-    #expect(Self.engagedStatus(await other.status(appVersion: 1)) == false, Self.holderRule)
+    #expect(Self.engagedStatus(await other.status(appVersion: HelperIdentity.version)) == false, Self.holderRule)
   }
 
   @Test func theEndOfAnotherConnectionKeepsTheHoldOfTheConnectionThatEngaged() async {
@@ -379,7 +391,7 @@ struct HelperXPCTests {
     let holder = harness.client()
     let other = harness.client()
     #expect(await holder.set(true) == .success(HelperReply(code: .owned, message: "owned")))
-    #expect(Self.engagedStatus(await other.status(appVersion: 1)) == true)
+    #expect(Self.engagedStatus(await other.status(appVersion: HelperIdentity.version)) == true)
     #expect(harness.connections == 2)
     harness.fake.forget()
     other.invalidate()
@@ -403,8 +415,8 @@ struct HelperXPCTests {
     #expect(await holder.set(true) == .success(HelperReply(code: .owned, message: "owned")))
     harness.fake.forget()
     harness.fake.advance(seconds: 54)
-    #expect(Self.engagedStatus(await other.status(appVersion: 1)) == true, Self.holderRule)
-    #expect(Self.engagedStatus(await other.status(appVersion: 1)) == true, Self.holderRule)
+    #expect(Self.engagedStatus(await other.status(appVersion: HelperIdentity.version)) == true, Self.holderRule)
+    #expect(Self.engagedStatus(await other.status(appVersion: HelperIdentity.version)) == true, Self.holderRule)
     harness.watch()
     #expect(harness.fake.pmsetWrites.isEmpty)
     harness.fake.advance(seconds: 1)
@@ -423,10 +435,10 @@ struct HelperXPCTests {
     let other = harness.client()
     defer { other.invalidate() }
     #expect(await holder.set(true) == .success(HelperReply(code: .owned, message: "owned")))
-    #expect(Self.engagedStatus(await other.status(appVersion: 1)) == true)
+    #expect(Self.engagedStatus(await other.status(appVersion: HelperIdentity.version)) == true)
     harness.fake.forget()
     harness.fake.advance(seconds: 54)
-    #expect(Self.engagedStatus(await holder.status(appVersion: 1)) == true, Self.holderRule)
+    #expect(Self.engagedStatus(await holder.status(appVersion: HelperIdentity.version)) == true, Self.holderRule)
     harness.fake.advance(seconds: 54)
     harness.watch()
     #expect(harness.fake.pmsetWrites.isEmpty, Self.holderRule)
@@ -448,7 +460,7 @@ struct HelperXPCTests {
     #expect(harness.fake.edgeCount == 1, Self.clearRule)
     #expect(harness.fake.sleepDisabled == false, Self.clearRule)
     #expect(harness.fake.storedRecord?.owns == false, Self.clearRule)
-    #expect(Self.engagedStatus(await holder.status(appVersion: 1)) == false, Self.clearRule)
+    #expect(Self.engagedStatus(await holder.status(appVersion: HelperIdentity.version)) == false, Self.clearRule)
     harness.fake.forget()
     other.invalidate()
     #expect(await OffPool.eventually { harness.connections == 1 })
@@ -486,7 +498,7 @@ struct HelperXPCTests {
     let other = harness.client()
     defer { other.invalidate() }
     #expect(await holder.set(true) == .success(HelperReply(code: .owned, message: "owned")))
-    #expect(!Self.isFailed(await other.status(appVersion: 1)))
+    #expect(!Self.isFailed(await other.status(appVersion: HelperIdentity.version)))
     #expect(spy.connections.count == 2)
     #expect(harness.connections == 2)
     harness.fake.forget()
@@ -508,7 +520,7 @@ struct HelperXPCTests {
     let other = harness.client()
     defer { other.invalidate() }
     #expect(await holder.set(true) == .success(HelperReply(code: .owned, message: "owned")))
-    #expect(!Self.isFailed(await other.status(appVersion: 1)))
+    #expect(!Self.isFailed(await other.status(appVersion: HelperIdentity.version)))
     #expect(spy.connections.count == 2)
     harness.fake.forget()
     spy.connections[0].interruptionHandler?()
@@ -527,7 +539,7 @@ struct HelperXPCTests {
     let client = harness.client()
     defer { client.invalidate() }
     #expect(await client.set(true) == .failed(Self.refusedByListener))
-    #expect(await client.status(appVersion: 1) == .failed(Self.refusedByListener))
+    #expect(await client.status(appVersion: HelperIdentity.version) == .failed(Self.refusedByListener))
     #expect(await client.set(false) == .failed(Self.refusedByListener))
     await harness.settle()
     #expect(harness.fake.calls.isEmpty)
@@ -564,7 +576,7 @@ struct HelperXPCTests {
     #expect(elapsed < 10)
     #expect(helper.callsHeld == 1)
     #expect(helper.connectionsMade == 1)
-    #expect(await OffPool.bounded(seconds: 30) { raw.status(appVersion: 1) } == .timedOut)
+    #expect(await OffPool.bounded(seconds: 30) { raw.status(appVersion: HelperIdentity.version) } == .timedOut)
     #expect(helper.callsHeld == 2)
     #expect(helper.connectionsMade == 2)
   }
@@ -576,7 +588,7 @@ struct HelperXPCTests {
     defer { client.invalidate() }
     #expect(await client.set(true) == .failed("replyCode 9"))
     #expect(helper.connectionsMade == 1)
-    #expect(await client.status(appVersion: 1) == .failed("undecodableStatus"))
+    #expect(await client.status(appVersion: HelperIdentity.version) == .failed("undecodableStatus"))
     #expect(helper.connectionsMade == 2)
   }
 
@@ -596,7 +608,7 @@ struct HelperXPCTests {
     harness.listener.delegate = spy
     let client = harness.client()
     defer { client.invalidate() }
-    #expect(!Self.isFailed(await client.status(appVersion: 1)))
+    #expect(!Self.isFailed(await client.status(appVersion: HelperIdentity.version)))
     #expect(spy.connections.count == 1)
     spy.connections[0].invalidationHandler?()
     #expect(await OffPool.eventually { harness.connections == 0 })
@@ -616,7 +628,7 @@ struct HelperXPCTests {
     _ = await client.set(true)
     #expect(harness.probe.onQueue > seen)
     seen = harness.probe.onQueue
-    _ = await client.status(appVersion: 1)
+    _ = await client.status(appVersion: HelperIdentity.version)
     #expect(harness.probe.onQueue > seen)
     seen = harness.probe.onQueue
     _ = await client.set(false)
@@ -682,7 +694,7 @@ struct HelperXPCTests {
       return
     }
     #expect(status.exiting)
-    #expect(status.helperVersion == 1)
+    #expect(status.helperVersion == HelperIdentity.version)
     #expect(await OffPool.eventually { harness.exitCount == 1 })
     _ = await client.status(appVersion: HelperIdentity.version + 1)
     #expect(await client.set(true) == .success(HelperReply(code: .refused, message: "exiting")))
@@ -733,7 +745,28 @@ struct HelperXPCTests {
     #expect(HelperXPCClient.defaultTimeoutSeconds == 5)
   }
 
-  @Test func theProtocolExposesExactlySetAndStatusWithABoolAndAnIntegerInput() {
+  @Test func theLimitsCrossTheConnectionAndTheHelperClampsThem() async throws {
+    let harness = Harness()
+    defer { harness.stop() }
+    harness.fake.setPower(HelperPowerFacts(onBattery: false, percent: 30, warningLevel: HelperPowerFacts.warningNone))
+    let client = harness.client()
+    defer { client.invalidate() }
+    #expect(
+      await client.set(true, batteryFloorPercent: 3, temperatureCeilingCelsius: 99)
+        == .success(HelperReply(code: .owned, message: "owned")))
+    let answer = await client.status(appVersion: HelperIdentity.version)
+    guard case .success(let status) = answer else {
+      Issue.record("status did not succeed: \(answer)")
+      return
+    }
+    #expect(status.batteryFloorPercent == 5)
+    #expect(status.temperatureCeilingCelsius == 60)
+    #expect(
+      await client.set(true, batteryFloorPercent: 40, temperatureCeilingCelsius: 0)
+        == .success(HelperReply(code: .refused, message: "battery")))
+  }
+
+  @Test func theProtocolExposesExactlySetWithABoolAndTwoIntegersAndStatusWithAnInteger() {
     var methods: [String: String] = [:]
     for required in [true, false] {
       for instance in [true, false] {
@@ -747,8 +780,11 @@ struct HelperXPCTests {
         free(list)
       }
     }
-    #expect(methods.keys.sorted() == ["setSleepDisabled:reply:", "statusWithAppHelperVersion:reply:"])
-    #expect(methods["setSleepDisabled:reply:"] == "v28@0:8B16@?20")
+    #expect(
+      methods.keys.sorted() == [
+        "setSleepDisabled:batteryFloorPercent:temperatureCeilingCelsius:reply:", "statusWithAppHelperVersion:reply:",
+      ])
+    #expect(methods["setSleepDisabled:batteryFloorPercent:temperatureCeilingCelsius:reply:"] == "v44@0:8B16q20q28@?36")
     #expect(methods["statusWithAppHelperVersion:reply:"] == "v32@0:8q16@?24")
   }
 }

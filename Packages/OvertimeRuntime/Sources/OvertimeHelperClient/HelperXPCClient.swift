@@ -57,9 +57,14 @@ public final class HelperXPCClient: @unchecked Sendable {
     }
   }
 
-  public func set(_ enabled: Bool) -> HelperCallResult<HelperReply> {
+  public func set(
+    _ enabled: Bool, batteryFloorPercent: Int = HelperSafetyLimits.notGiven,
+    temperatureCeilingCelsius: Int = HelperSafetyLimits.notGiven
+  ) -> HelperCallResult<HelperReply> {
     call { proxy, gate in
-      proxy.setSleepDisabled(enabled) { code, message in
+      proxy.setSleepDisabled(
+        enabled, batteryFloorPercent: batteryFloorPercent, temperatureCeilingCelsius: temperatureCeilingCelsius
+      ) { code, message in
         guard let known = HelperReplyCode(rawValue: code) else {
           return gate.resolve(.failed("replyCode \(code)"))
         }

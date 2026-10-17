@@ -30,6 +30,8 @@ public struct HelperStatus: Codable, Sendable, Equatable {
   public var thermalCritical: Bool?
   public var lastReleaseReason: String?
   public var exiting: Bool
+  public var batteryFloorPercent: Int?
+  public var temperatureCeilingCelsius: Int?
 
   private enum CodingKeys: String, CodingKey {
     case helperVersion
@@ -44,13 +46,18 @@ public struct HelperStatus: Codable, Sendable, Equatable {
     case thermalCritical
     case lastReleaseReason
     case exiting
+    case batteryFloorPercent
+    case temperatureCeilingCelsius
   }
 
   public init(
     helperVersion: Int = 0, sleepDisabled: Bool? = nil, owns: Bool = false, prior: Bool? = nil, engaged: Bool = false,
     batteryPercent: Int? = nil, onBattery: Bool? = nil, warningLevel: Int? = nil, thermalLevel: Int? = nil,
-    thermalCritical: Bool? = nil, lastReleaseReason: String? = nil, exiting: Bool = false
+    thermalCritical: Bool? = nil, lastReleaseReason: String? = nil, exiting: Bool = false,
+    batteryFloorPercent: Int? = nil, temperatureCeilingCelsius: Int? = nil
   ) {
+    self.batteryFloorPercent = batteryFloorPercent
+    self.temperatureCeilingCelsius = temperatureCeilingCelsius
     self.helperVersion = helperVersion
     self.sleepDisabled = sleepDisabled
     self.owns = owns
@@ -79,6 +86,8 @@ public struct HelperStatus: Codable, Sendable, Equatable {
     thermalCritical = Self.lenient(values, .thermalCritical)
     lastReleaseReason = Self.lenient(values, .lastReleaseReason)
     exiting = Self.lenient(values, .exiting) ?? false
+    batteryFloorPercent = Self.lenient(values, .batteryFloorPercent)
+    temperatureCeilingCelsius = Self.lenient(values, .temperatureCeilingCelsius)
   }
 
   public func encoded() -> Data {

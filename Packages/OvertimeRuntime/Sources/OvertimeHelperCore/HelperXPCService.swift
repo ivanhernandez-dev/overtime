@@ -48,14 +48,20 @@ public final class HelperXPCService: NSObject, NSXPCListenerDelegate, HelperXPCP
     return true
   }
 
-  public func setSleepDisabled(_ enabled: Bool, reply: @escaping @Sendable (Int32, String) -> Void) {
+  public func setSleepDisabled(
+    _ enabled: Bool, batteryFloorPercent: Int, temperatureCeilingCelsius: Int,
+    reply: @escaping @Sendable (Int32, String) -> Void
+  ) {
     let caller = NSXPCConnection.current().map { ObjectIdentifier($0) }
+    let floor = batteryFloorPercent
+    let ceiling = temperatureCeilingCelsius
+    let requested = HelperSafetyLimits(requestedBatteryFloorPercent: floor, requestedTemperatureCeilingCelsius: ceiling)
     queue.async {
       let answer: HelperReply
       if !enabled {
         answer = self.machine.clear()
       } else if let caller, let connection = self.live[caller] {
-        answer = self.machine.set(from: connection)
+        answer = self.machine.set(from: connection, limits: requested)
       } else {
         self.log.record("set refused reason=\(Self.noConnectionReason)")
         answer = HelperReply(code: .refused, message: Self.noConnectionReason)

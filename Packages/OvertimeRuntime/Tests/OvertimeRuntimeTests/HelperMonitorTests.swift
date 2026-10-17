@@ -168,7 +168,10 @@ final class ScriptedStatusHelper: NSObject, NSXPCListenerDelegate, HelperXPCProt
     return true
   }
 
-  func setSleepDisabled(_ enabled: Bool, reply: @escaping @Sendable (Int32, String) -> Void) {
+  func setSleepDisabled(
+    _ enabled: Bool, batteryFloorPercent: Int, temperatureCeilingCelsius: Int,
+    reply: @escaping @Sendable (Int32, String) -> Void
+  ) {
     script.withLock { $0.sets += 1 }
     reply(HelperReplyCode.refused.rawValue, "scripted")
   }

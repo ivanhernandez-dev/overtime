@@ -73,10 +73,13 @@ public final class XPCHelperPort: HelperPort {
     XPCHelperPort(client: HelperXPCClient.privileged(identity: identity, timeoutSeconds: defaultBoundSeconds))
   }
 
-  public func engage() -> EffectOutcome {
+  public func engage(limits: HelperLimits) -> EffectOutcome {
     holding.withLock { $0 = true }
     return exchange {
-      switch client.set(true) {
+      switch client.set(
+        true, batteryFloorPercent: limits.batteryFloorPercent,
+        temperatureCeilingCelsius: limits.temperatureCeilingCelsius ?? HelperSafetyLimits.notGiven)
+      {
       case .success(let reply):
         guard reply.code == .owned || reply.code == .alreadyOn else {
           return .failed(code: LiveInterpreter.helperRefusedCode)

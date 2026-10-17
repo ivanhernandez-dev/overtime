@@ -76,7 +76,7 @@ struct HelperIdentityTests {
   }
 
   @Test func theHelperVersionAndTheCertificateRootArePinned() {
-    #expect(HelperIdentity.version == 1)
+    #expect(HelperIdentity.version == 2)
     #expect(HelperIdentity.certificateRoot == "9c54a8e3e576cc8e7eb6d5a2dc63aa7607b821ce")
   }
 

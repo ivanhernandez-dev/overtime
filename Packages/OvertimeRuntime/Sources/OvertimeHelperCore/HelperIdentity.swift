@@ -1,5 +1,5 @@
 public struct HelperIdentity: Sendable, Equatable {
-  public static let version = 1
+  public static let version = 2
   public static let certificateRoot = "9c54a8e3e576cc8e7eb6d5a2dc63aa7607b821ce"
 
   public static let release = HelperIdentity(

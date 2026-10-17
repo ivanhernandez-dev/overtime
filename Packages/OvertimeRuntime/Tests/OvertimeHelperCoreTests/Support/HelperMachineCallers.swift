@@ -10,6 +10,12 @@ extension HelperMachine {
     set(from: .app)
   }
 
+  func set(floor: Int, ceiling: Int = HelperSafetyLimits.notGiven) -> HelperReply {
+    set(
+      from: .app,
+      limits: HelperSafetyLimits(requestedBatteryFloorPercent: floor, requestedTemperatureCeilingCelsius: ceiling))
+  }
+
   func status(appVersion: Int) -> (status: HelperStatus, exitAfterReply: Bool) {
     status(appVersion: appVersion, from: .app)
   }

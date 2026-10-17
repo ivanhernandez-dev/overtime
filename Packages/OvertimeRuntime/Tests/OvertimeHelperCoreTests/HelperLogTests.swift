@@ -225,7 +225,7 @@ struct HelperLogTests {
     #expect(
       scratch.contents(scratch.logPath)
         == [
-          "reconcile none", "set owned prior=0", "release reason=clear sleepDisabled=0 edge=done",
+          "reconcile none", "set owned prior=0 floor=10 ceiling=60", "release reason=clear sleepDisabled=0 edge=done",
         ].map { "\(Self.stamp) \($0)\n" }.joined())
   }
 }

@@ -3,7 +3,6 @@ import Foundation
 public final class HelperMachine {
   public static let heartbeatTimeoutSeconds: Double = 55
   public static let watchPeriodSeconds: Double = 5
-  public static let batteryFloorPercent = 10
   public static let thermalTrappingLevel = 3
   public static let verifyPollMilliseconds = 50
   public static let verifyWindowSeconds: Double = 2
@@ -28,6 +27,7 @@ public final class HelperMachine {
   private let version: Int
 
   private var record: HelperRecord?
+  private var limits = HelperSafetyLimits.compiled
   private var engaged = false
   private var holder: HelperConnectionID?
   private var stage = Stage.clear
@@ -79,15 +79,15 @@ public final class HelperMachine {
     }
   }
 
-  public func set(from caller: HelperConnectionID) -> HelperReply {
+  public func set(from caller: HelperConnectionID, limits requested: HelperSafetyLimits = .compiled) -> HelperReply {
     let asked = clock.now()
     guard !shouldExit, !terminating else { return refused("exiting") }
-    if let reason = unsafeReason() { return refuse(reason) }
+    if let reason = unsafeReason(requested) { return refuse(reason) }
     guard let current = system.readSleepDisabled() else { return refuse("unreadable") }
     if current && !(owns && stage == .clear) {
       guard store(HelperRecord(owns: false, prior: true, at: clock.now())) else { return refuse("recordWrite") }
-      engage(caller, at: asked)
-      log.record("set alreadyOn prior=1")
+      engage(caller, at: asked, limits: requested)
+      log.record("set alreadyOn prior=1 " + Self.describe(requested))
       return HelperReply(code: .alreadyOn, message: "alreadyOn")
     }
     guard store(HelperRecord(owns: true, prior: false, at: clock.now())) else { return refuse("recordWrite") }
@@ -96,8 +96,8 @@ public final class HelperMachine {
       guard system.writeSleepDisabled(true) else { return refuse("pmset", releaseAs: "setFailed") }
       guard confirm(true) else { return refuse("verify", releaseAs: "setFailed") }
     }
-    engage(caller, at: asked)
-    log.record("set owned prior=0")
+    engage(caller, at: asked, limits: requested)
+    log.record("set owned prior=0 " + Self.describe(requested))
     return HelperReply(code: .owned, message: "owned")
   }
 
@@ -126,7 +126,8 @@ public final class HelperMachine {
       helperVersion: version, sleepDisabled: sleepDisabled, owns: owns, prior: record?.prior, engaged: engaged,
       batteryPercent: power?.percent, onBattery: power?.onBattery, warningLevel: power?.warningLevel,
       thermalLevel: thermal?.pressureLevel, thermalCritical: thermal?.critical,
-      lastReleaseReason: lastReleaseReason, exiting: shouldExit)
+      lastReleaseReason: lastReleaseReason, exiting: shouldExit, batteryFloorPercent: limits.batteryFloorPercent,
+      temperatureCeilingCelsius: limits.temperatureCeilingCelsius)
     return (status, shouldExit)
   }
 
@@ -153,7 +154,7 @@ public final class HelperMachine {
   }
 
   public func power(_ facts: HelperPowerFacts?) {
-    guard engaged, let reason = Self.powerReason(facts) else { return }
+    guard engaged, let reason = Self.powerReason(facts, floor: limits.batteryFloorPercent) else { return }
     release(reason)
   }
 
@@ -172,7 +173,7 @@ public final class HelperMachine {
     }
     if now - lastContact >= Self.heartbeatTimeoutSeconds {
       release("heartbeat")
-    } else if let reason = unsafeReason() {
+    } else if let reason = unsafeReason(limits) {
       release(reason)
     }
   }
@@ -186,11 +187,15 @@ public final class HelperMachine {
     }
   }
 
-  private static func powerReason(_ facts: HelperPowerFacts?) -> String? {
+  private static func powerReason(_ facts: HelperPowerFacts?, floor: Int) -> String? {
     guard let facts else { return "powerUnreadable" }
     if facts.warningLevel != HelperPowerFacts.warningNone { return "lowBatteryWarning" }
-    if facts.percent <= batteryFloorPercent { return "battery" }
+    if facts.percent <= floor { return "battery" }
     return nil
+  }
+
+  private static func describe(_ limits: HelperSafetyLimits) -> String {
+    "floor=\(limits.batteryFloorPercent) ceiling=\(limits.temperatureCeilingCelsius)"
   }
 
   private static func thermalReason(_ facts: HelperThermalFacts?) -> String? {
@@ -199,10 +204,10 @@ public final class HelperMachine {
     return nil
   }
 
-  private func unsafeReason() -> String? {
+  private func unsafeReason(_ limits: HelperSafetyLimits) -> String? {
     guard let closed = system.lidClosed() else { return "lidUnreadable" }
     guard closed else { return "lidOpen" }
-    if let reason = Self.powerReason(system.power()) { return reason }
+    if let reason = Self.powerReason(system.power(), floor: limits.batteryFloorPercent) { return reason }
     return Self.thermalReason(system.thermal())
   }
 
@@ -218,7 +223,8 @@ public final class HelperMachine {
     }
   }
 
-  private func engage(_ caller: HelperConnectionID, at asked: Double) {
+  private func engage(_ caller: HelperConnectionID, at asked: Double, limits requested: HelperSafetyLimits) {
+    limits = requested
     engaged = true
     holder = caller
     lastContact = asked
@@ -242,6 +248,7 @@ public final class HelperMachine {
   private func release(_ reason: String) -> Released {
     engaged = false
     holder = nil
+    limits = .compiled
     lastReleaseReason = reason
     guard owns else {
       retry = nil

@@ -5,6 +5,8 @@ import Testing
 struct HelperMachineTests {
   typealias Call = FakeHelperSystem.Call
 
+  static let machineVersion = 1
+
   static let ownedSet: [Call] = [
     .readSleepDisabled, .recordWrite(owns: true, prior: false), .writeSleepDisabled(true), .readSleepDisabled,
   ]
@@ -13,7 +15,7 @@ struct HelperMachineTests {
     sleepDisabled: Bool? = false, lid: Bool? = true, stored: HelperRecordRead = .missing
   ) -> (machine: HelperMachine, fake: FakeHelperSystem) {
     let fake = FakeHelperSystem(sleepDisabled: sleepDisabled, lid: lid, stored: stored)
-    return (HelperMachine(system: fake, record: fake, log: fake, clock: fake), fake)
+    return (HelperMachine(system: fake, record: fake, log: fake, clock: fake, version: Self.machineVersion), fake)
   }
 
   func owned(lid: Bool? = true) -> (machine: HelperMachine, fake: FakeHelperSystem) {
@@ -37,7 +39,7 @@ struct HelperMachineTests {
     #expect(fake.storedRecord?.owns == true)
     #expect(fake.storedRecord?.prior == false)
     #expect(fake.sleepDisabled == true)
-    #expect(fake.logLines == ["set owned prior=0"])
+    #expect(fake.logLines == ["set owned prior=0 floor=10 ceiling=60"])
   }
 
   @Test func everyPmsetOf1FollowsAnOwningRecordWrite() {
@@ -87,7 +89,7 @@ struct HelperMachineTests {
     #expect(fake.holdCalls == [.readSleepDisabled, .recordWrite(owns: false, prior: true)])
     #expect(fake.pmsetWrites.isEmpty)
     #expect(fake.sleepDisabled == true)
-    #expect(fake.logLines == ["set alreadyOn prior=1"])
+    #expect(fake.logLines == ["set alreadyOn prior=1 floor=10 ceiling=60"])
   }
 
   @Test func aFailedRecordWriteAlsoRefusesASetOverAValueThatIsAlreadyOn() {
@@ -312,7 +314,7 @@ struct HelperMachineTests {
     let status = HelperStatus(
       helperVersion: 7, sleepDisabled: true, owns: true, prior: false, engaged: true, batteryPercent: 42,
       onBattery: true, warningLevel: 2, thermalLevel: 1, thermalCritical: false, lastReleaseReason: "clear",
-      exiting: true)
+      exiting: true, batteryFloorPercent: 25, temperatureCeilingCelsius: 45)
     #expect(HelperStatus.decode(status.encoded()) == status)
     #expect(HelperStatus.decode(HelperStatus().encoded()) == HelperStatus())
   }
@@ -631,14 +633,126 @@ struct HelperMachineTests {
   }
 
   @Test func theFloorReadsTheChargeAndNeverThePowerSource() {
-    for onBattery in [true, false] {
-      for percent in [0, 10, 11, 100] {
-        let (machine, fake) = owned()
-        machine.power(
-          HelperPowerFacts(onBattery: onBattery, percent: percent, warningLevel: HelperPowerFacts.warningNone))
-        #expect(fake.pmsetWrites == (percent <= 10 ? [false] : []), Self.floorOnAnySource)
+    for floor in [5, 10, 25, 50] {
+      for onBattery in [true, false] {
+        for percent in [0, floor, floor + 1, 100] {
+          let (machine, fake) = owned(floor: floor)
+          machine.power(
+            HelperPowerFacts(onBattery: onBattery, percent: percent, warningLevel: HelperPowerFacts.warningNone))
+          #expect(fake.pmsetWrites == (percent <= floor ? [false] : []), Self.floorOnAnySource)
+        }
       }
     }
+  }
+
+  static let configuredFloorOnAnySource: Comment =
+    "floorOnAnySource at non-default floors: H-CR-01 holds at whatever floor the app configured, on battery and on power"
+
+  static func charge(_ percent: Int, onBattery: Bool) -> HelperPowerFacts {
+    onBattery ? battery(percent) : onPower(percent)
+  }
+
+  func owned(
+    floor: Int, ceiling: Int = HelperSafetyLimits.notGiven, power: HelperPowerFacts = FakeHelperSystem.onPower
+  ) -> (machine: HelperMachine, fake: FakeHelperSystem) {
+    let pair = make()
+    pair.fake.setPower(power)
+    #expect(pair.machine.set(floor: floor, ceiling: ceiling).code == .owned)
+    pair.fake.forget()
+    return pair
+  }
+
+  @Test(arguments: [5, 25, 50], [true, false])
+  func aConfiguredFloorReleasesAtOrBelowItWhateverThePowerSource(floor: Int, onBattery: Bool) {
+    let event = owned(floor: floor, power: Self.charge(floor + 1, onBattery: onBattery))
+    event.machine.power(Self.charge(floor + 1, onBattery: onBattery))
+    #expect(event.fake.pmsetWrites.isEmpty, Self.configuredFloorOnAnySource)
+    event.machine.power(Self.charge(floor, onBattery: onBattery))
+    #expect(event.fake.pmsetWrites == [false], Self.configuredFloorOnAnySource)
+    #expect(
+      event.fake.logLines == ["release reason=battery sleepDisabled=0 edge=done"], Self.configuredFloorOnAnySource)
+
+    let watched = owned(floor: floor, power: Self.charge(floor + 1, onBattery: onBattery))
+    watched.machine.watch()
+    #expect(watched.fake.pmsetWrites.isEmpty, Self.configuredFloorOnAnySource)
+    watched.fake.setPower(Self.charge(floor, onBattery: onBattery))
+    watched.machine.watch()
+    #expect(watched.fake.pmsetWrites == [false], Self.configuredFloorOnAnySource)
+    #expect(
+      watched.fake.logLines == ["release reason=battery sleepDisabled=0 edge=done"], Self.configuredFloorOnAnySource)
+  }
+
+  @Test(arguments: [true, false])
+  func aSetAtOrBelowAConfiguredFloorIsRefusedOnBatteryAndOnPower(onBattery: Bool) {
+    let (machine, fake) = make()
+    fake.setPower(Self.charge(25, onBattery: onBattery))
+    #expect(machine.set(floor: 25) == HelperReply(code: .refused, message: "battery"), Self.configuredFloorOnAnySource)
+    #expect(fake.pmsetWrites.isEmpty)
+    #expect(fake.stored == .missing)
+    fake.setPower(Self.charge(26, onBattery: onBattery))
+    #expect(machine.set(floor: 25).code == .owned, Self.configuredFloorOnAnySource)
+  }
+
+  @Test func aClampedRequestIsEnforcedAtTheClampedValue() {
+    let low = make()
+    low.fake.setPower(Self.onPower(5))
+    #expect(low.machine.set(floor: 3) == HelperReply(code: .refused, message: "battery"))
+    low.fake.setPower(Self.onPower(6))
+    #expect(low.machine.set(floor: 3).code == .owned)
+    low.machine.power(Self.onPower(5))
+    #expect(low.fake.pmsetWrites == [true, false])
+
+    let high = make()
+    high.fake.setPower(Self.onPower(50))
+    #expect(high.machine.set(floor: 99) == HelperReply(code: .refused, message: "battery"))
+    high.fake.setPower(Self.onPower(51))
+    #expect(high.machine.set(floor: 99).code == .owned)
+  }
+
+  @Test func aSetWithoutLimitsUsesTheCompiledDefaults() {
+    let (machine, fake) = make()
+    fake.setPower(Self.onPower(10))
+    #expect(machine.set() == HelperReply(code: .refused, message: "battery"))
+    fake.setPower(Self.onPower(11))
+    #expect(machine.set().code == .owned)
+    let status = machine.status(appVersion: 1).status
+    #expect(status.batteryFloorPercent == 10)
+    #expect(status.temperatureCeilingCelsius == 60)
+  }
+
+  @Test func theSessionLimitsEndWithTheRelease() {
+    let (machine, fake) = owned(floor: 30, power: Self.onPower(40))
+    #expect(machine.status(appVersion: 1).status.batteryFloorPercent == 30)
+    #expect(machine.clear().code == .cleared)
+    fake.setPower(Self.onPower(25))
+    #expect(machine.set().code == .owned)
+  }
+
+  @Test func aSecondSetReplacesTheSessionLimits() {
+    let (machine, fake) = owned(floor: 10, power: Self.onPower(20))
+    #expect(machine.set(floor: 25) == HelperReply(code: .refused, message: "battery"))
+    #expect(fake.pmsetWrites == [false])
+    #expect(!machine.needsWatch)
+  }
+
+  @Test func theSetLinesNameTheEffectiveLimits() {
+    let owning = make()
+    _ = owning.machine.set(floor: 25, ceiling: 45)
+    #expect(owning.fake.logLines == ["set owned prior=0 floor=25 ceiling=45"])
+    let already = make(sleepDisabled: true)
+    _ = already.machine.set()
+    #expect(already.fake.logLines == ["set alreadyOn prior=1 floor=10 ceiling=60"])
+  }
+
+  @Test func statusReportsTheSessionLimits() {
+    let (machine, _) = owned(floor: 25, ceiling: 45)
+    let held = machine.status(appVersion: 1).status
+    #expect(held.batteryFloorPercent == 25)
+    #expect(held.temperatureCeilingCelsius == 45)
+    _ = machine.clear()
+    let released = machine.status(appVersion: 1).status
+    #expect(released.batteryFloorPercent == 10)
+    #expect(released.temperatureCeilingCelsius == 60)
   }
 
   @Test func statusAndSetRefreshTheLastContact() {
@@ -1144,7 +1258,7 @@ struct HelperMachineTests {
         == HelperStatus(
           helperVersion: 1, sleepDisabled: true, owns: true, prior: false, engaged: true, batteryPercent: 80,
           onBattery: false, warningLevel: 1, thermalLevel: 0, thermalCritical: false, lastReleaseReason: nil,
-          exiting: false))
+          exiting: false, batteryFloorPercent: 10, temperatureCeilingCelsius: 60))
     #expect(!answer.exitAfterReply)
     #expect(fake.calls == [.readSleepDisabled, .power, .thermal])
   }
@@ -1172,7 +1286,9 @@ struct HelperMachineTests {
     let (machine, fake) = make(sleepDisabled: nil)
     fake.setPower(nil)
     fake.setThermal(nil)
-    #expect(machine.status(appVersion: 1).status == HelperStatus(helperVersion: 1))
+    #expect(
+      machine.status(appVersion: 1).status
+        == HelperStatus(helperVersion: 1, batteryFloorPercent: 10, temperatureCeilingCelsius: 60))
   }
 
   @Test func aStaleHelperThatIsNotEngagedExitsAfterItsReply() {
@@ -1275,7 +1391,6 @@ struct HelperMachineTests {
   @Test func theLimitsAreTheDocumentedOnes() {
     #expect(HelperMachine.heartbeatTimeoutSeconds == 55)
     #expect(HelperMachine.watchPeriodSeconds == 5)
-    #expect(HelperMachine.batteryFloorPercent == 10)
     #expect(HelperMachine.thermalTrappingLevel == 3)
     #expect(HelperMachine.verifyPollMilliseconds == 50)
     #expect(HelperMachine.verifyWindowSeconds == 2)
