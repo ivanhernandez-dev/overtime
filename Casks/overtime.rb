@@ -1,6 +1,6 @@
 cask "overtime" do
-  version "1.0.0"
-  sha256 "51930043ee7ab30b57f00e5fefff8acd2d09ec8ee5381ec20ea60259f04b3b70"
+  version "1.0.1"
+  sha256 "9dfd8fb47ce17c31dc36648762dfde9466da891ae6709ee16d060648f9fc0df6"
 
   url "https://github.com/ivanhernandez-dev/overtime/releases/download/v#{version}/Overtime-#{version}.zip"
   name "Overtime"
