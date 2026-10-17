@@ -2,7 +2,7 @@
 
 All notable changes to Overtime are listed here, in the Keep a Changelog format, and versions follow Semantic Versioning.
 
-## [Unreleased]
+## [1.0.1]
 
 ### Added
 
@@ -14,6 +14,8 @@ All notable changes to Overtime are listed here, in the Keep a Changelog format,
 ### Changed
 
 - The unplug protection helper changed (helper version 2). After the update, macOS asks once to allow it again under Allow in the Background.
+- A clearer setup guide. Its last step, Setup complete, says there is nothing left to do. The Location step became iPhone hotspot (optional): it asks for Location only after you choose your hotspot, and says what Location is used for and what it is never used for. Check your setup is now Recommended macOS settings.
+- The Homebrew cask now lives in Overtime's own repository: `brew tap ivanhernandez-dev/overtime https://github.com/ivanhernandez-dev/overtime`, then `brew install --cask ivanhernandez-dev/overtime/overtime`. If you installed from the previous tap, run `brew untap ivanhernandez-dev/tap`; Overtime keeps updating itself either way.
 
 ### Fixed
 
