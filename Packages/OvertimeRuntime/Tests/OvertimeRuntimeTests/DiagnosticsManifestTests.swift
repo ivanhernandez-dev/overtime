@@ -130,7 +130,8 @@ struct DiagnosticsManifestTests {
     "  as Amphetamine.",
     "- The names of folders inside your home folder, and the full path of",
     "  folders outside it.",
-    "- The Mac model, the macOS version and the battery level.",
+    "- The Mac model, the macOS version, the battery level and the battery",
+    "  temperature.",
     "",
     "If any of this should stay private, open the files and check them before",
     "you share the archive.",
@@ -324,6 +325,9 @@ struct DiagnosticsManifestTests {
       snapshot: EngineSnapshot(
         helperFacts: HelperFacts(installed: false, reachable: false, current: false, sleepDisabled: true)),
       path: "helper.sleepDisabled"),
+    FlagCase(snapshot: EngineSnapshot(temperatureBlocked: true), path: "temperatureBlocked"),
+    FlagCase(snapshot: EngineSnapshot(), path: "batteryProtectionEnabled"),
+    FlagCase(snapshot: EngineSnapshot(), path: "temperatureProtectionEnabled"),
   ]
 
   static func truths(in value: Any, under prefix: String = "") -> [String] {
@@ -338,7 +342,14 @@ struct DiagnosticsManifestTests {
 
   @Test(arguments: flagCases)
   func eachFlagOfTheSnapshotIsEncodedUnderItsOwnKey(_ item: FlagCase) throws {
-    let object = try Self.object(DiagnosticsManifest.snapshotJSON(item.snapshot))
+    var snapshot = item.snapshot
+    if item.path != "batteryProtectionEnabled" {
+      snapshot.batteryProtectionEnabled = false
+    }
+    if item.path != "temperatureProtectionEnabled" {
+      snapshot.temperatureProtectionEnabled = false
+    }
+    let object = try Self.object(DiagnosticsManifest.snapshotJSON(snapshot))
     #expect(Self.truths(in: object) == [item.path])
   }
 
@@ -374,7 +385,8 @@ struct DiagnosticsManifestTests {
         "mode", "busy", "wanted", "reason", "releaseUntilIdle", "pause", "force", "batteryBlocked",
         "batteryLowPercent", "batteryResumePercent", "power", "holdError", "lidClosed", "externalDisplays",
         "wantedSince", "graceDeadline", "coexistenceWarned", "amphetamineRunning", "otherTools", "counters",
-        "detectionWarnings", "selfTest", "helper", "network", "sessions",
+        "detectionWarnings", "selfTest", "helper", "network", "sessions", "batteryProtectionEnabled",
+        "helperBatteryFloorPercent", "temperatureProtectionEnabled", "temperatureReleaseCelsius", "temperatureBlocked",
       ])
     for key in Self.keys(in: object).map({ $0.lowercased() }) {
       for word in ["arg", "exec", "command", "path", "transcript"] {
@@ -415,6 +427,7 @@ struct DiagnosticsManifestTests {
       Set(counters.keys) == [
         "holdErrorEpisodes", "holdErrorsWhileBusy", "batteryReleases", "busyStartsBelowFloor", "stuckReleases",
         "unexpectedSleeps", "forceSince", "busyEndedAt", "sleepRequested", "hotspotSwitches", "wifiCycles",
+        "temperatureReleases",
       ])
     #expect(counters["hotspotSwitches"] as? Int == 7)
     #expect(counters["wifiCycles"] as? Int == 8)
@@ -586,7 +599,8 @@ struct DiagnosticsManifestTests {
       Set(object.keys) == [
         "mode", "releaseUntilIdle", "batteryBlocked", "batteryLowPercent", "batteryResumePercent", "holdError",
         "coexistenceWarned", "amphetamineRunning", "otherTools", "counters", "detectionWarnings", "selfTest", "helper",
-        "sessions",
+        "sessions", "batteryProtectionEnabled", "helperBatteryFloorPercent", "temperatureProtectionEnabled",
+        "temperatureReleaseCelsius", "temperatureBlocked",
       ])
     #expect((object["helper"] as? [String: Any])?.keys.sorted() == ["engaged"])
     #expect((object["selfTest"] as? [String: Any])?.keys.sorted() == ["errorActive", "failures", "runs", "status"])
@@ -595,6 +609,40 @@ struct DiagnosticsManifestTests {
     let code = try Self.object(
       DiagnosticsManifest.snapshotJSON(EngineSnapshot(selfTest: .failed(.assertionRefused(5)))))
     #expect((code["selfTest"] as? [String: Any])?["code"] as? Int == 5)
+  }
+
+  @Test func theSnapshotExportCarriesTheProtectionState() throws {
+    let hot = EngineSnapshot(
+      busy: true, wanted: false, reason: "temperature", events: EventCounters(temperatureReleases: 2),
+      batteryProtectionEnabled: false, helperBatteryFloorPercent: 15, temperatureBlocked: true,
+      batteryTemperature: .celsius(47), temperatureProtectionEnabled: true, temperatureReleaseCelsius: 46)
+    let object = try Self.object(DiagnosticsManifest.snapshotJSON(hot))
+    let blocked = object["temperatureBlocked"] as? Bool
+    #expect(blocked == true)
+    let reading = object["batteryTemperature"] as? String
+    #expect(reading == "47")
+    let protection = object["batteryProtectionEnabled"] as? Bool
+    #expect(protection == false)
+    let floor = object["helperBatteryFloorPercent"] as? Int
+    #expect(floor == 15)
+    let temperatureProtection = object["temperatureProtectionEnabled"] as? Bool
+    #expect(temperatureProtection == true)
+    let release = object["temperatureReleaseCelsius"] as? Int
+    #expect(release == 46)
+    let counters = try #require(object["counters"] as? [String: Any])
+    let releases = counters["temperatureReleases"] as? Int
+    #expect(releases == 2)
+    for (value, text) in [(BatteryTemperatureReading.unavailable, "unavailable"), (.unreadable, "unreadable")] {
+      let exported = try Self.object(DiagnosticsManifest.snapshotJSON(EngineSnapshot(batteryTemperature: value)))
+      let word = exported["batteryTemperature"] as? String
+      #expect(word == text)
+    }
+    let none = try Self.object(DiagnosticsManifest.snapshotJSON(EngineSnapshot()))
+    #expect(none["batteryTemperature"] == nil)
+    let off = try Self.object(
+      DiagnosticsManifest.snapshotJSON(EngineSnapshot(temperatureProtectionEnabled: false)))
+    let offValue = off["temperatureProtectionEnabled"] as? Bool
+    #expect(offValue == false)
   }
 
   @Test func snapshotJSONIsSortedReadableAndKeepsSlashesPlain() {

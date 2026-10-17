@@ -4,6 +4,7 @@ public enum NotificationCategory: String, CaseIterable, Sendable, Hashable {
   case keepAwakeFailed
   case batteryFloor
   case belowFloorAtStart
+  case batteryTemperature
   case lidClosedSummary
   case forceReminder
 

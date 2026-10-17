@@ -44,7 +44,7 @@ public enum OnboardingStep: String, Sendable, Equatable, CaseIterable, Identifia
     case .launchAtLogin:
       "Overtime needs to be running to keep the Mac awake. Launching it at login means you never have to remember."
     case .notifications:
-      "Overtime notifies you only when you need to act: when keep-awake fails, when the battery is too low to keep going, once when you open the lid if something happened, and when \(ControlMapping.keepAwakeLabel) is left on. You can turn off each kind in Settings."
+      "Overtime notifies you only when you need to act: when keep-awake fails, when the battery is too low or too hot to keep going, once when you open the lid if something happened, and when \(ControlMapping.keepAwakeLabel) is left on. You can turn off each kind in Settings."
     case .location:
       "If the network stops working while the lid is closed and Claude is working, Overtime can switch the Mac to your iPhone hotspot, and back when you open the lid. Choose your hotspot to turn this on, or continue without it."
     case .checks:

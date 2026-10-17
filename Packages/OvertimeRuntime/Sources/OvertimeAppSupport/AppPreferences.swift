@@ -47,7 +47,7 @@ public struct SelfTestRecord: Codable, Sendable, Equatable {
 
 public struct AppPreferences: Codable, Sendable, Equatable {
   public static let categoryKeys: [NotificationCategoryKey] = [
-    "keepAwakeFailed", "batteryFloor", "belowFloorAtStart", "lidClosedSummary", "forceReminder",
+    "keepAwakeFailed", "batteryFloor", "belowFloorAtStart", "batteryTemperature", "lidClosedSummary", "forceReminder",
   ]
   public static let forceReminderHoursRange = 1...12
   public static let defaultForceReminderHours = 3

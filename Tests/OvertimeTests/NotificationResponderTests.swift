@@ -52,7 +52,9 @@ struct NotificationResponderTests {
     #expect(opened.panes.isEmpty)
   }
 
-  @Test(arguments: [NotificationCategory.keepAwakeFailed, .batteryFloor, .belowFloorAtStart, .lidClosedSummary])
+  @Test(arguments: [
+    NotificationCategory.keepAwakeFailed, .batteryFloor, .belowFloorAtStart, .batteryTemperature, .lidClosedSummary,
+  ])
   func turnOffOnAnyOtherCategoryReachesNoEngine(_ category: NotificationCategory) async {
     let host = FakeEngineHost()
     host.scriptProbe(Self.forced)
@@ -71,7 +73,9 @@ struct NotificationResponderTests {
     #expect(host.requests.isEmpty)
   }
 
-  @Test(arguments: [NotificationCategory.batteryFloor, .belowFloorAtStart, .lidClosedSummary, .forceReminder])
+  @Test(arguments: [
+    NotificationCategory.batteryFloor, .belowFloorAtStart, .batteryTemperature, .lidClosedSummary, .forceReminder,
+  ])
   func theDefaultActionOnOtherCategoriesOnlyDismisses(_ category: NotificationCategory) async {
     let host = FakeEngineHost()
     host.scriptProbe(Self.forced)

@@ -68,6 +68,7 @@ public enum DiagnosticsManifest {
       var sleepRequested: Bool
       var hotspotSwitches: UInt64
       var wifiCycles: UInt64
+      var temperatureReleases: UInt64
     }
 
     struct Network: Encodable {
@@ -146,6 +147,12 @@ public enum DiagnosticsManifest {
     var helper: Helper
     var network: Network?
     var sessions: [Session]
+    var batteryProtectionEnabled: Bool
+    var helperBatteryFloorPercent: Int
+    var temperatureProtectionEnabled: Bool
+    var temperatureReleaseCelsius: Int
+    var temperatureBlocked: Bool
+    var batteryTemperature: String?
   }
 
   public static let snapshotFile = "snapshot.json"
@@ -205,7 +212,8 @@ public enum DiagnosticsManifest {
       as Amphetamine.
     - The names of folders inside your home folder, and the full path of
       folders outside it.
-    - The Mac model, the macOS version and the battery level.
+    - The Mac model, the macOS version, the battery level and the battery
+      temperature.
 
     If any of this should stay private, open the files and check them before
     you share the archive.
@@ -323,7 +331,7 @@ public enum DiagnosticsManifest {
         stuckReleases: snapshot.events.stuckReleases, unexpectedSleeps: snapshot.events.unexpectedSleeps,
         forceSince: snapshot.events.forceSince?.nanoseconds, busyEndedAt: snapshot.events.busyEndedAt?.nanoseconds,
         sleepRequested: snapshot.events.sleepRequested, hotspotSwitches: snapshot.events.hotspotSwitches,
-        wifiCycles: snapshot.events.wifiCycles),
+        wifiCycles: snapshot.events.wifiCycles, temperatureReleases: snapshot.events.temperatureReleases),
       detectionWarnings: snapshot.detectionWarnings.map { warningText($0, homeDirectory: nil) },
       selfTest: export(snapshot.selfTest, snapshot: snapshot),
       helper: SnapshotExport.Helper(
@@ -332,7 +340,20 @@ public enum DiagnosticsManifest {
       network: snapshot.network.map(export),
       sessions: snapshot.sessions.map {
         SnapshotExport.Session(pid: $0.pid, cwd: $0.cwd, tty: $0.ttyName, start: $0.startMono?.nanoseconds)
-      })
+      },
+      batteryProtectionEnabled: snapshot.batteryProtectionEnabled,
+      helperBatteryFloorPercent: snapshot.helperBatteryFloorPercent,
+      temperatureProtectionEnabled: snapshot.temperatureProtectionEnabled,
+      temperatureReleaseCelsius: snapshot.temperatureReleaseCelsius, temperatureBlocked: snapshot.temperatureBlocked,
+      batteryTemperature: snapshot.batteryTemperature.map(export))
+  }
+
+  static func export(_ reading: BatteryTemperatureReading) -> String {
+    switch reading {
+    case .celsius(let celsius): String(celsius)
+    case .unavailable: "unavailable"
+    case .unreadable: "unreadable"
+    }
   }
 
   static func export(_ network: NetworkSummary) -> SnapshotExport.Network {

@@ -97,7 +97,7 @@ struct LabelCaseTests {
   static let reminderTitle = "Keep Awake is still on"
   static let reminderBody = "Keep Awake has been on for 3 hours with no Claude activity."
   static let notificationsBody =
-    "Overtime notifies you only when you need to act: when keep-awake fails, when the battery is too low to keep going, once when you open the lid if something happened, and when Keep Awake is left on. You can turn off each kind in Settings."
+    "Overtime notifies you only when you need to act: when keep-awake fails, when the battery is too low or too hot to keep going, once when you open the lid if something happened, and when Keep Awake is left on. You can turn off each kind in Settings."
   static let archiveSentence = "Overtime made this archive from Settings > Diagnostics > Export Diagnostics."
 
   @Test func theSentencesThatNameAControlUseItsLabel() {

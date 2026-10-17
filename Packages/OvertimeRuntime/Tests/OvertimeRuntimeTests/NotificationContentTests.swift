@@ -12,6 +12,7 @@ struct NotificationContentTests {
       NotificationContent.batteryFloor(floorPercent: 10),
       NotificationContent.belowFloorAtStart(percent: 8, floorPercent: 10),
       NotificationContent.belowFloorAtStart(percent: nil, floorPercent: 10),
+      NotificationContent.batteryTemperature(releaseCelsius: 45),
       NotificationContent.lidClosedSummary(lines: everyJournalLine),
       NotificationContent.forceReminder(hours: 3),
     ]
@@ -20,6 +21,7 @@ struct NotificationContentTests {
   static var everyJournalLine: [String] {
     [
       NotificationContent.batteryReleaseLine(floorPercent: 10),
+      NotificationContent.batteryTemperatureReleaseLine(releaseCelsius: 45),
       NotificationContent.stuckReleaseLine,
       NotificationContent.holdErrorLine(count: 1),
       NotificationContent.holdErrorLine(count: 3),
@@ -40,7 +42,27 @@ struct NotificationContentTests {
         == "Overtime restarted the wireless connection 3 times to get back online.")
     #expect(
       Set(NotificationCategory.allCases)
-        == [.keepAwakeFailed, .batteryFloor, .belowFloorAtStart, .lidClosedSummary, .forceReminder])
+        == [
+          .keepAwakeFailed, .batteryFloor, .belowFloorAtStart, .batteryTemperature, .lidClosedSummary, .forceReminder,
+        ])
+  }
+
+  @Test func theBatteryTemperatureNotificationNamesTheReleaseTemperature() {
+    #expect(
+      NotificationCategory.allCases == [
+        .keepAwakeFailed, .batteryFloor, .belowFloorAtStart, .batteryTemperature, .lidClosedSummary, .forceReminder,
+      ])
+    let intent = NotificationContent.batteryTemperature(releaseCelsius: 45)
+    #expect(intent.category == .batteryTemperature)
+    #expect(intent.identifier == "overtime.batteryTemperature")
+    #expect(intent.title == "Battery too hot")
+    #expect(
+      intent.body == "The battery reached 45°C. Overtime stopped keeping the Mac awake so it can cool down.")
+    #expect(intent.sound)
+    #expect(!intent.turnOffAction)
+    #expect(
+      NotificationContent.batteryTemperatureReleaseLine(releaseCelsius: 50)
+        == "The battery reached 50°C, so Overtime let the Mac sleep.")
   }
 
   @Test func theKeepAwakeFailedCopyMatchesTheSpec() {
@@ -129,7 +151,8 @@ struct NotificationContentTests {
 
   @Test func soundIsOnOnlyForTheActionableCategories() {
     for intent in Self.everyIntent {
-      let expected = [.keepAwakeFailed, .batteryFloor, .belowFloorAtStart].contains(intent.category)
+      let expected = [.keepAwakeFailed, .batteryFloor, .belowFloorAtStart, .batteryTemperature].contains(
+        intent.category)
       #expect(intent.sound == expected, "\(intent.category)")
       #expect(intent.turnOffAction == (intent.category == .forceReminder), "\(intent.category)")
     }

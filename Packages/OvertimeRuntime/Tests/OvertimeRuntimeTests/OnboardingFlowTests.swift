@@ -23,7 +23,7 @@ struct OnboardingFlowTests {
     StepCopy(
       step: .notifications, title: "Notifications", symbol: "bell.badge",
       body:
-        "Overtime notifies you only when you need to act: when keep-awake fails, when the battery is too low to keep going, once when you open the lid if something happened, and when Keep Awake is left on. You can turn off each kind in Settings."
+        "Overtime notifies you only when you need to act: when keep-awake fails, when the battery is too low or too hot to keep going, once when you open the lid if something happened, and when Keep Awake is left on. You can turn off each kind in Settings."
     ),
     StepCopy(
       step: .location, title: "iPhone hotspot (optional)", symbol: "personalhotspot",

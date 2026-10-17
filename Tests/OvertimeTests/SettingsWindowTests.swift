@@ -1931,20 +1931,44 @@ struct SettingsWindowTests {
     #expect(GeneralPane.remindAfterLabel == "Remind after")
     #expect(
       NotificationCategory.allCases.map { GeneralPane.notificationLabel($0) } == [
-        "Keep-awake failed", "Battery floor", "Battery low when Claude starts", "Lid-closed summary",
-        "Keep Awake reminder",
+        "Keep-awake failed", "Battery floor", "Battery low when Claude starts", "Battery temperature",
+        "Lid-closed summary", "Keep Awake reminder",
       ])
     #expect(
       NotificationCategory.allCases.map { GeneralPane.notificationCaption($0, floorPercent: floor) } == [
         "When Overtime can't keep the Mac awake while Claude works, or its self-test fails.",
         "When the battery reaches 15% with the lid open.",
         "When Claude starts while the battery is already below 15%.",
+        "When the battery reaches 45°C with the lid open.",
         "One summary when you open the lid, only if something happened while it was closed.",
         "When Keep Awake has been on with no Claude activity.",
       ])
     #expect(
       GeneralPane.notificationCaption(.batteryFloor, floorPercent: 10)
         == "When the battery reaches 10% with the lid open.")
+  }
+
+  @Test func theNotificationCaptionsFollowTheProtectionSwitches() {
+    let off = "Battery protection is off in Settings > Battery."
+    for category in [NotificationCategory.batteryFloor, .belowFloorAtStart] {
+      let caption = GeneralPane.notificationCaption(category, floorPercent: 10, batteryProtectionEnabled: false)
+      #expect(caption == off)
+    }
+    let floorOn = GeneralPane.notificationCaption(.batteryFloor, floorPercent: 10, batteryProtectionEnabled: true)
+    #expect(floorOn == "When the battery reaches 10% with the lid open.")
+    let startOn = GeneralPane.notificationCaption(.belowFloorAtStart, floorPercent: 10)
+    #expect(startOn == "When Claude starts while the battery is already below 10%.")
+    #expect(GeneralPane.notificationLabel(.batteryTemperature) == "Battery temperature")
+    let hot = GeneralPane.notificationCaption(.batteryTemperature, floorPercent: 10, releaseCelsius: 45)
+    #expect(hot == "When the battery reaches 45°C with the lid open.")
+    let hotter = GeneralPane.notificationCaption(.batteryTemperature, floorPercent: 10, releaseCelsius: 52)
+    #expect(hotter == "When the battery reaches 52°C with the lid open.")
+    let hotOff = GeneralPane.notificationCaption(
+      .batteryTemperature, floorPercent: 10, releaseCelsius: 45, temperatureProtectionEnabled: false)
+    #expect(hotOff == "Temperature protection is off in Settings > Battery.")
+    let unaffected = GeneralPane.notificationCaption(
+      .batteryTemperature, floorPercent: 10, releaseCelsius: 45, batteryProtectionEnabled: false)
+    #expect(unaffected == hot)
   }
 
   @Test func aPaneWithItemsReportsNeedsAttentionAndItsHelpListsThePaneTexts() async throws {

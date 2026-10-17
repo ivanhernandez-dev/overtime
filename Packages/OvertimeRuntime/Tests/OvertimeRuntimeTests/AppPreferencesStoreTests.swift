@@ -5,7 +5,7 @@ import Testing
 
 struct AppPreferencesStoreTests {
   static let allCategories = [
-    "keepAwakeFailed", "batteryFloor", "belowFloorAtStart", "lidClosedSummary", "forceReminder",
+    "keepAwakeFailed", "batteryFloor", "belowFloorAtStart", "batteryTemperature", "lidClosedSummary", "forceReminder",
   ]
 
   static func file(_ temp: TempDirectory) -> URL {
@@ -37,6 +37,21 @@ struct AppPreferencesStoreTests {
     #expect(preferences.forceReminderHours == 3)
     #expect(preferences.onboarding == nil)
     #expect(preferences.selfTest == nil)
+  }
+
+  @Test func anOlderPreferencesFileTurnsTheTemperatureNotificationOn() throws {
+    let temp = try TempDirectory()
+    let url = Self.file(temp)
+    try Self.plant(
+      """
+      {"notifications": {"keepAwakeFailed": true, "batteryFloor": false, "belowFloorAtStart": true,
+      "lidClosedSummary": true, "forceReminder": true}, "forceReminderHours": 4}
+      """, at: url)
+    let preferences = try #require(Self.loaded(AppPreferencesStore.read(at: url)))
+    #expect(preferences.notifications["batteryTemperature"] == true)
+    #expect(preferences.isEnabled("batteryTemperature"))
+    #expect(!preferences.isEnabled("batteryFloor"))
+    #expect(preferences.forceReminderHours == 4)
   }
 
   @Test func aWriteIsOwnerOnlyAndReadsBack() throws {

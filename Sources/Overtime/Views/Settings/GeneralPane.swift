@@ -1,5 +1,6 @@
 import AppKit
 import OvertimeAppSupport
+import OvertimeCore
 import SwiftUI
 
 struct NotificationStatusRow: Equatable {
@@ -63,19 +64,31 @@ struct GeneralPane: View {
     case .keepAwakeFailed: "Keep-awake failed"
     case .batteryFloor: "Battery floor"
     case .belowFloorAtStart: "Battery low when Claude starts"
+    case .batteryTemperature: "Battery temperature"
     case .lidClosedSummary: "Lid-closed summary"
     case .forceReminder: "\(ControlMapping.keepAwakeLabel) reminder"
     }
   }
 
-  static func notificationCaption(_ category: NotificationCategory, floorPercent: Int) -> String {
+  static let batteryProtectionOffCaption = "Battery protection is off in Settings > Battery."
+  static let temperatureProtectionOffCaption = "Temperature protection is off in Settings > Battery."
+
+  static func notificationCaption(
+    _ category: NotificationCategory, floorPercent: Int, releaseCelsius: Int = Settings().temperatureReleaseCelsius,
+    batteryProtectionEnabled: Bool = true, temperatureProtectionEnabled: Bool = true
+  ) -> String {
     switch category {
     case .keepAwakeFailed:
       "When Overtime can't keep the Mac awake while Claude works, or its self-test fails."
     case .batteryFloor:
-      "When the battery reaches \(floorPercent)% with the lid open."
+      batteryProtectionEnabled
+        ? "When the battery reaches \(floorPercent)% with the lid open." : batteryProtectionOffCaption
     case .belowFloorAtStart:
-      "When Claude starts while the battery is already below \(floorPercent)%."
+      batteryProtectionEnabled
+        ? "When Claude starts while the battery is already below \(floorPercent)%." : batteryProtectionOffCaption
+    case .batteryTemperature:
+      temperatureProtectionEnabled
+        ? "When the battery reaches \(releaseCelsius)°C with the lid open." : temperatureProtectionOffCaption
     case .lidClosedSummary:
       "One summary when you open the lid, only if something happened while it was closed."
     case .forceReminder:
@@ -197,7 +210,11 @@ struct NotificationSwitchRow: View {
   let model: SettingsModel
 
   var body: some View {
-    let caption = GeneralPane.notificationCaption(category, floorPercent: model.settings.batteryLowPercent)
+    let settings = model.settings
+    let caption = GeneralPane.notificationCaption(
+      category, floorPercent: settings.batteryLowPercent, releaseCelsius: settings.temperatureReleaseCelsius,
+      batteryProtectionEnabled: settings.batteryProtectionEnabled,
+      temperatureProtectionEnabled: settings.temperatureProtectionEnabled)
     VStack(alignment: .leading, spacing: 4) {
       Toggle(
         GeneralPane.notificationLabel(category),

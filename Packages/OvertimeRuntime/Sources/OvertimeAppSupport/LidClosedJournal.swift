@@ -4,6 +4,7 @@ import OvertimeEngine
 
 public enum JournalEvent: Sendable, Equatable {
   case batteryRelease(floorPercent: Int)
+  case temperatureRelease(releaseCelsius: Int)
   case stuckRelease
   case holdError(count: Int)
   case sentinelClear
@@ -15,6 +16,8 @@ public enum JournalEvent: Sendable, Equatable {
     switch self {
     case .batteryRelease(let floorPercent):
       NotificationContent.batteryReleaseLine(floorPercent: floorPercent)
+    case .temperatureRelease(let releaseCelsius):
+      NotificationContent.batteryTemperatureReleaseLine(releaseCelsius: releaseCelsius)
     case .stuckRelease:
       NotificationContent.stuckReleaseLine
     case .holdError(let count):
@@ -56,6 +59,9 @@ public struct LidClosedJournal: Sendable, Equatable {
     record(.holdError(count: 1), times: delta(\.holdErrorEpisodes, counters))
     record(.stuckRelease, times: delta(\.stuckReleases, counters))
     record(.batteryRelease(floorPercent: snapshot.batteryLowPercent), times: delta(\.batteryReleases, counters))
+    record(
+      .temperatureRelease(releaseCelsius: snapshot.temperatureReleaseCelsius),
+      times: delta(\.temperatureReleases, counters))
     record(.unexpectedSleep, times: delta(\.unexpectedSleeps, counters))
     record(.hotspotSwitch, times: delta(\.hotspotSwitches, counters))
     record(.wifiCycle(count: 1), times: delta(\.wifiCycles, counters))
@@ -71,7 +77,7 @@ public struct LidClosedJournal: Sendable, Equatable {
       recordMerged(.wifiCycle(count: Self.multiplying(each, count)))
     case .hotspotSwitch:
       recordHotspotSwitch()
-    case .batteryRelease, .stuckRelease, .sentinelClear, .unexpectedSleep:
+    case .batteryRelease, .temperatureRelease, .stuckRelease, .sentinelClear, .unexpectedSleep:
       let room = max(0, Self.maxEvents - events.count)
       let kept = min(count, room)
       events.append(contentsOf: repeatElement(event, count: kept))

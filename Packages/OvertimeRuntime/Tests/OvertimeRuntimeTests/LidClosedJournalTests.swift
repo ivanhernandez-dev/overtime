@@ -66,6 +66,18 @@ struct LidClosedJournalTests {
       ])
   }
 
+  @Test func aTemperatureReleaseAddsItsSummaryLine() throws {
+    var journal = LidClosedJournal.start(baseline: EventCounters())
+    journal.append(
+      from: EngineSnapshot(
+        busy: false, lidClosed: true, events: EventCounters(temperatureReleases: 1), temperatureBlocked: true,
+        temperatureReleaseCelsius: 45))
+    #expect(journal.events == [.temperatureRelease(releaseCelsius: 45)])
+    #expect(journal.lines() == ["The battery reached 45°C, so Overtime let the Mac sleep."])
+    let summary = try #require(journal.summary())
+    #expect(summary.body == "The battery reached 45°C, so Overtime let the Mac sleep.")
+  }
+
   @Test func theSummaryShowsThreeLinesAndCountsTheRest() throws {
     var journal = LidClosedJournal.start(baseline: EventCounters())
     journal.append(from: Self.snapshot(stuck: 1))

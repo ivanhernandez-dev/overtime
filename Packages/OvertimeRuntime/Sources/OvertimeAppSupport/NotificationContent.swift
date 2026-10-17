@@ -48,6 +48,18 @@ public enum NotificationContent {
       body: belowFloorAtStartBody(percent: percent, floorPercent: floorPercent))
   }
 
+  public static let batteryTemperatureTitle = "Battery too hot"
+
+  public static func batteryTemperatureBody(releaseCelsius: Int) -> String {
+    "The battery reached \(releaseCelsius)°C. Overtime stopped keeping the Mac awake so it can cool down."
+  }
+
+  public static func batteryTemperature(releaseCelsius: Int) -> NotificationIntent {
+    intent(
+      .batteryTemperature, title: batteryTemperatureTitle,
+      body: batteryTemperatureBody(releaseCelsius: releaseCelsius))
+  }
+
   public static func lidClosedSummaryBody(lines: [String], omitted: Int = 0) -> String {
     var shown = Array(lines.prefix(maxSummaryLines))
     let (total, overflow) = lines.count.addingReportingOverflow(max(0, omitted))
@@ -79,6 +91,10 @@ public enum NotificationContent {
     "Battery reached \(floorPercent)%, so Overtime let the Mac sleep."
   }
 
+  public static func batteryTemperatureReleaseLine(releaseCelsius: Int) -> String {
+    "The battery reached \(releaseCelsius)°C, so Overtime let the Mac sleep."
+  }
+
   public static func holdErrorLine(count: Int) -> String {
     count <= 1 ? "Keep-awake failed and was retried." : "Keep-awake failed \(count) times and was retried."
   }
@@ -95,7 +111,7 @@ public enum NotificationContent {
 
   public static func sound(for category: NotificationCategory) -> Bool {
     switch category {
-    case .keepAwakeFailed, .batteryFloor, .belowFloorAtStart:
+    case .keepAwakeFailed, .batteryFloor, .belowFloorAtStart, .batteryTemperature:
       true
     case .lidClosedSummary, .forceReminder:
       false

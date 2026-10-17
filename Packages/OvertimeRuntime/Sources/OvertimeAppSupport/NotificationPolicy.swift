@@ -14,11 +14,14 @@ public struct NotificationPolicyState: Sendable, Equatable {
   public var reminderPostedAnchor: Instant?
   public var selfTestFailures: UInt64
   public var selfTestStreakNotified: Bool
+  public var temperatureCycleUsed: Bool
 
   public init(
     counters: EventCounters = EventCounters(), lastPosted: [NotificationCategory: Instant] = [:],
-    batteryFloorCycleUsed: Bool = false, belowFloorCycleUsed: Bool = false, sentinelClearPending: Bool = false
+    batteryFloorCycleUsed: Bool = false, belowFloorCycleUsed: Bool = false, sentinelClearPending: Bool = false,
+    temperatureCycleUsed: Bool = false
   ) {
+    self.temperatureCycleUsed = temperatureCycleUsed
     self.counters = counters
     self.lastPosted = lastPosted
     self.batteryFloorCycleUsed = batteryFloorCycleUsed
@@ -37,7 +40,7 @@ extension NotificationPolicyState {
   public func carriedToNewEngine() -> NotificationPolicyState {
     var next = NotificationPolicyState(
       lastPosted: lastPosted, batteryFloorCycleUsed: batteryFloorCycleUsed, belowFloorCycleUsed: belowFloorCycleUsed,
-      sentinelClearPending: sentinelClearPending)
+      sentinelClearPending: sentinelClearPending, temperatureCycleUsed: temperatureCycleUsed)
     next.selfTestStreakNotified = selfTestStreakNotified
     return next
   }
@@ -64,6 +67,7 @@ public enum NotificationPolicy {
     let holdFailed = rose(\.holdErrorsWhileBusy, state: &state, snapshot: snapshot)
     let released = rose(\.batteryReleases, state: &state, snapshot: snapshot)
     let startedBelow = rose(\.busyStartsBelowFloor, state: &state, snapshot: snapshot)
+    let hot = rose(\.temperatureReleases, state: &state, snapshot: snapshot)
     let resets = endsDischargeCycle(snapshot)
     if holdFailed {
       intents.append(NotificationContent.keepAwakeFailed())
@@ -84,6 +88,13 @@ public enum NotificationPolicy {
     if resets {
       state.batteryFloorCycleUsed = false
       state.belowFloorCycleUsed = false
+    }
+    if hot, snapshot.lidClosed != true, !state.temperatureCycleUsed {
+      state.temperatureCycleUsed = true
+      intents.append(NotificationContent.batteryTemperature(releaseCelsius: snapshot.temperatureReleaseCelsius))
+    }
+    if !snapshot.temperatureBlocked {
+      state.temperatureCycleUsed = false
     }
     if let summary = lidClosedSummary(&state, snapshot: snapshot) {
       intents.append(summary)

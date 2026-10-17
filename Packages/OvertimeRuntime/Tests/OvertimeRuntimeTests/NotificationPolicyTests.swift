@@ -513,6 +513,58 @@ struct NotificationPolicyTests {
     }
   }
 
+  static func hot(
+    releases: UInt64, blocked: Bool = true, lidClosed: Bool? = false, release: Int = 45
+  ) -> EngineSnapshot {
+    EngineSnapshot(
+      busy: true, wanted: false, reason: blocked ? "temperature" : "busy", lidClosed: lidClosed,
+      power: .ac(percent: 80), events: EventCounters(temperatureReleases: releases), temperatureBlocked: blocked,
+      batteryTemperature: .celsius(blocked ? release + 1 : release - 6), temperatureReleaseCelsius: release)
+  }
+
+  @Test func aTemperatureReleaseWithTheLidOpenPostsOncePerHotSpell() {
+    var state = NotificationPolicyState()
+    let first = Self.step(&state, Self.hot(releases: 1, release: 50))
+    #expect(Self.categories(first) == [.batteryTemperature])
+    #expect(first.first?.title == "Battery too hot")
+    #expect(
+      first.first?.body == "The battery reached 50°C. Overtime stopped keeping the Mac awake so it can cool down.")
+    #expect(first.first?.sound == true)
+    #expect(state.temperatureCycleUsed)
+    #expect(Self.step(&state, Self.hot(releases: 2, release: 50), at: 700).isEmpty)
+    #expect(Self.step(&state, Self.hot(releases: 2, blocked: false, release: 50), at: 800).isEmpty)
+    #expect(!state.temperatureCycleUsed)
+    let again = Self.step(&state, Self.hot(releases: 3, release: 50), at: 1_500)
+    #expect(Self.categories(again) == [.batteryTemperature])
+  }
+
+  @Test func aTemperatureReleaseWithTheLidClosedGoesIntoTheSummary() {
+    var state = NotificationPolicyState()
+    #expect(Self.step(&state, Self.hot(releases: 0, blocked: false, lidClosed: false)).isEmpty)
+    #expect(Self.step(&state, Self.hot(releases: 0, blocked: false, lidClosed: true), at: 1).isEmpty)
+    #expect(Self.step(&state, Self.hot(releases: 1, lidClosed: true), at: 2).isEmpty)
+    #expect(!state.temperatureCycleUsed)
+    let opened = Self.step(&state, Self.hot(releases: 1, lidClosed: false), at: 3)
+    #expect(Self.categories(opened) == [.lidClosedSummary])
+    #expect(opened.first?.body == "The battery reached 45°C, so Overtime let the Mac sleep.")
+  }
+
+  @Test func theHotSpellFlagIsCarriedToANewEngine() {
+    var state = NotificationPolicyState()
+    #expect(Self.categories(Self.step(&state, Self.hot(releases: 1))) == [.batteryTemperature])
+    let carried = state.carriedToNewEngine()
+    #expect(carried.temperatureCycleUsed)
+    #expect(NotificationPolicyState(temperatureCycleUsed: false).carriedToNewEngine().temperatureCycleUsed == false)
+  }
+
+  @Test func aDisabledTemperatureNotificationIsNotPosted() {
+    var state = NotificationPolicyState()
+    var preferences = AppPreferences()
+    preferences.notifications["batteryTemperature"] = false
+    #expect(Self.step(&state, Self.hot(releases: 1), preferences: preferences).isEmpty)
+    #expect(state.lastPosted[.batteryTemperature] == nil)
+  }
+
   static func lid(
     _ closed: Bool?, hold: UInt64 = 0, stuck: UInt64 = 0, battery: UInt64 = 0, sleeps: UInt64 = 0
   ) -> EngineSnapshot {
