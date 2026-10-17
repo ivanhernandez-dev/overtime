@@ -103,6 +103,7 @@ struct EventCountersTests {
 
   @Test func wantGoingOffForTheTemperatureLimitRaisesTemperatureReleases() {
     var harness = Self.harness()
+    harness.settings.temperatureProtectionEnabled = true
     _ = Self.busyAt(&harness, 0)
     #expect(harness.state.want.wanted == true)
     _ = harness.send(.batteryTemperature(.celsius(46)), at: 1)

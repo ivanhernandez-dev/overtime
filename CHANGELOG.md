@@ -8,7 +8,7 @@ All notable changes to Overtime are listed here, in the Keep a Changelog format,
 
 - A Keep display on switch in the menu bar panel. It is the same setting as "Keep display on while Claude works" in Settings > General, and a change in either place shows in the other.
 - Battery protection can be turned off in Settings > Battery. Unplug protection keeps its own floor, which you can now set from 5% to 50%.
-- Temperature protection: Overtime lets the Mac sleep when the battery reaches a temperature you choose (45°C by default) and holds again 5°C below it. Unplug protection also stops at that temperature, or at 60°C with temperature protection off.
+- Temperature protection, off by default: once you turn it on in Settings > Battery, Overtime lets the Mac sleep when the battery reaches a temperature you choose (45°C by default) and holds again 5°C below it. Unplug protection also stops at that temperature, or at 60°C with temperature protection off.
 - A Battery temperature notification, which you can turn off in Settings > General.
 
 ### Changed

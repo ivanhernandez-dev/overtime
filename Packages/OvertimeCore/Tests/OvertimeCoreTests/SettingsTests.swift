@@ -22,12 +22,22 @@ struct SettingsTests {
     #expect(settings.hotspotAutoDetect == false)
     #expect(settings.batteryProtectionEnabled == true)
     #expect(settings.helperBatteryFloorPercent == 10)
-    #expect(settings.temperatureProtectionEnabled == true)
+    #expect(settings.temperatureProtectionEnabled == false)
     #expect(settings.temperatureReleaseCelsius == 45)
   }
 
   @Test func aFileWithoutTheProtectionKeysKeepsTheirDefaults() throws {
     #expect(try decode(#"{"batteryLowPercent":15}"#) == Settings(batteryLowPercent: 15))
+  }
+
+  @Test func aFileWithoutTheTemperatureKeyLeavesTemperatureProtectionOff() throws {
+    let settings = try decode(#"{"batteryLowPercent":15,"temperatureReleaseCelsius":50}"#)
+    #expect(settings.temperatureProtectionEnabled == false)
+    #expect(settings.temperatureReleaseCelsius == 50)
+    #expect(settings.batteryProtectionEnabled == true)
+    #expect(settings.helperBatteryFloorPercent == 10)
+    #expect(HelperLimits(settings: settings).temperatureCeilingCelsius == nil)
+    #expect(HelperLimits(settings: Settings()) == HelperLimits(batteryFloorPercent: 10, temperatureCeilingCelsius: nil))
   }
 
   @Test func theProtectionSettingsRoundTripThroughJSON() throws {

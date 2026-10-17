@@ -38,8 +38,9 @@ struct HelperIntentTests {
     .tick(TickFacts(agents: agents, lidClosed: closed, externalDisplays: 0, fullWake: fullWake))
   }
 
-  static func working(lidClosed: Bool, facts: HelperFacts? = ready) -> HoldDriver {
+  static func working(lidClosed: Bool, facts: HelperFacts? = ready, settings: Settings = Settings()) -> HoldDriver {
     var driver = HoldDriver()
+    driver.harness.settings = settings
     if let facts {
       driver.send(.helperFacts(facts), at: -4)
     }
@@ -48,8 +49,8 @@ struct HelperIntentTests {
     return driver
   }
 
-  static func engaged() -> HoldDriver {
-    working(lidClosed: true)
+  static func engaged(settings: Settings = Settings()) -> HoldDriver {
+    working(lidClosed: true, settings: settings)
   }
 
   static func helperActions(_ effects: some Sequence<Effect>) -> [HelperAction] {
@@ -433,7 +434,7 @@ struct HelperIntentTests {
   }
 
   @Test func aHotBatteryReleasesAnEngagedHelperWithTheTemperatureReason() throws {
-    var driver = Self.engaged()
+    var driver = Self.engaged(settings: Settings(temperatureProtectionEnabled: true))
     try #require(driver.harness.state.helper.phase == .engaged)
     let effects = driver.harness.send(.batteryTemperature(.celsius(45)), at: 5)
     guard case .helper(.release, let id, _)? = effects.first else {
@@ -449,7 +450,7 @@ struct HelperIntentTests {
     try #require(driver.harness.state.helper.phase == .engaged)
     driver.harness.settings.helperBatteryFloorPercent = 25
     let effects = driver.harness.send(.power(.ac(percent: 80)), at: 5)
-    let limits = HelperLimits(batteryFloorPercent: 25, temperatureCeilingCelsius: 45)
+    let limits = HelperLimits(batteryFloorPercent: 25, temperatureCeilingCelsius: nil)
     guard case .helper(.engage, let id, _)? = effects.last else {
       Issue.record("the batch does not end with a helper engage: \(effects)")
       return

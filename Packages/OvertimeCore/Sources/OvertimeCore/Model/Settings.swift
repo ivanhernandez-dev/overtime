@@ -29,7 +29,7 @@ public struct Settings: Codable, Sendable, Equatable {
     hotspotAutoDetect: Bool = false,
     batteryProtectionEnabled: Bool = true,
     helperBatteryFloorPercent: Int = 10,
-    temperatureProtectionEnabled: Bool = true,
+    temperatureProtectionEnabled: Bool = false,
     temperatureReleaseCelsius: Int = 45
   ) {
     self.batteryLowPercent = batteryLowPercent

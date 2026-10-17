@@ -75,7 +75,8 @@ struct GeneralPane: View {
 
   static func notificationCaption(
     _ category: NotificationCategory, floorPercent: Int, releaseCelsius: Int = Settings().temperatureReleaseCelsius,
-    batteryProtectionEnabled: Bool = true, temperatureProtectionEnabled: Bool = true
+    batteryProtectionEnabled: Bool = Settings().batteryProtectionEnabled,
+    temperatureProtectionEnabled: Bool = Settings().temperatureProtectionEnabled
   ) -> String {
     switch category {
     case .keepAwakeFailed:

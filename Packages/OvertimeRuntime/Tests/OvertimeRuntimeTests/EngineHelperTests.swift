@@ -419,7 +419,9 @@ struct EngineHelperTests {
     defer { helper.stop() }
     let port = XPCHelperPort(client: helper.client())
     let engine = try harness.engine(
-      helper: port, settings: Settings(helperBatteryFloorPercent: 25, temperatureReleaseCelsius: 45))
+      helper: port,
+      settings: Settings(
+        helperBatteryFloorPercent: 25, temperatureProtectionEnabled: true, temperatureReleaseCelsius: 45))
     await harness.engage(engine)
     #expect(await engine.state.helper.phase == .engaged)
     #expect(helper.fake.logLines.contains("set owned prior=0 floor=25 ceiling=45"))
@@ -647,7 +649,7 @@ struct EngineHelperTests {
     #expect(await Self.run { port.engage() } == .timedOut)
     #expect(
       await OffPool.eventually { helper.fake.logLines.contains(InProcessHelper.connectionRelease) }, Self.holderRule)
-    #expect(helper.fake.logLines.contains("set owned prior=0 floor=10 ceiling=45"))
+    #expect(helper.fake.logLines.contains("set owned prior=0 floor=10 ceiling=60"))
     #expect(helper.fake.pmsetWrites == [true, false], Self.holderRule)
     #expect(helper.fake.sleepDisabled == false, Self.holderRule)
     #expect(helper.connectionsMade == 2)

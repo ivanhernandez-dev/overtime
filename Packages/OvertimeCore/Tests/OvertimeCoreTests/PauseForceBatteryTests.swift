@@ -98,6 +98,7 @@ struct PauseForceBatteryTests {
 
   @Test func forceNeverWinsOverTheTemperatureLimit() {
     var harness = Self.idleHarness()
+    harness.settings.temperatureProtectionEnabled = true
     _ = harness.send(.batteryTemperature(.celsius(50)), at: 1)
     #expect(harness.state.temperature.blocked)
     let effects = harness.send(.command(.force(.indefinite)), at: 2)

@@ -49,13 +49,14 @@ struct BatteryPaneTests {
 
   @Test func theTemperatureProtectionSwitchSavesAndApplies() async throws {
     let fixture = try Fixture()
+    #expect(!fixture.model.temperatureProtectionEnabled)
+    #expect(await fixture.model.setTemperatureProtectionEnabled(false) == nil)
+    #expect(await fixture.model.setTemperatureProtectionEnabled(true) == .applied)
+    #expect(fixture.fileSettings?.temperatureProtectionEnabled == true)
+    #expect(fixture.host.appliedSettings.map(\.temperatureProtectionEnabled) == [true])
     #expect(fixture.model.temperatureProtectionEnabled)
     #expect(await fixture.model.setTemperatureProtectionEnabled(false) == .applied)
-    #expect(fixture.fileSettings?.temperatureProtectionEnabled == false)
-    #expect(fixture.host.appliedSettings.map(\.temperatureProtectionEnabled) == [false])
     #expect(!fixture.model.temperatureProtectionEnabled)
-    #expect(await fixture.model.setTemperatureProtectionEnabled(true) == .applied)
-    #expect(fixture.model.temperatureProtectionEnabled)
   }
 
   @Test func theLevelRowsStayEditableWithBatteryProtectionOff() async throws {

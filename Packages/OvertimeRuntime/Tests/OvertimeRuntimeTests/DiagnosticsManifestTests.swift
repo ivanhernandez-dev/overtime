@@ -327,7 +327,7 @@ struct DiagnosticsManifestTests {
       path: "helper.sleepDisabled"),
     FlagCase(snapshot: EngineSnapshot(temperatureBlocked: true), path: "temperatureBlocked"),
     FlagCase(snapshot: EngineSnapshot(), path: "batteryProtectionEnabled"),
-    FlagCase(snapshot: EngineSnapshot(), path: "temperatureProtectionEnabled"),
+    FlagCase(snapshot: EngineSnapshot(temperatureProtectionEnabled: true), path: "temperatureProtectionEnabled"),
   ]
 
   static func truths(in value: Any, under prefix: String = "") -> [String] {

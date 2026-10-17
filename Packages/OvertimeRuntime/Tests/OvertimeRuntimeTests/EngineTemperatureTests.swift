@@ -9,6 +9,7 @@ struct EngineTemperatureTests {
   typealias Harness = EngineLoopTests.Harness
 
   static let lineSeconds: Double = 10
+  static let protected = Settings(temperatureProtectionEnabled: true)
 
   @Test func theFirstTemperatureReadingIsSteppedBeforeTheFirstTick() async throws {
     let harness = try Harness()
@@ -18,7 +19,7 @@ struct EngineTemperatureTests {
         transcriptSeed: { [TranscriptActivity(at: recent)] },
         sampleTick: { TickFacts() },
         temperatureRead: { .celsius(50) }
-      ))
+      ), settings: Self.protected)
     await engine.runOnce()
     let lines = harness.lines()
     #expect(lines.contains { $0.contains(" TEMPERATURE block celsius=50 ") })
@@ -36,7 +37,7 @@ struct EngineTemperatureTests {
         transcriptSeed: { [TranscriptActivity(at: recent)] },
         sampleTick: { TickFacts() },
         temperatureStream: { stream }
-      ))
+      ), settings: Self.protected)
     let running = Task { await engine.run() }
     #expect(await harness.waitForLine(containing: " WANT on reason=busy", timeout: Self.lineSeconds))
     continuation.yield(.celsius(47))
@@ -50,17 +51,19 @@ struct EngineTemperatureTests {
 
   @Test func raisingTheReleaseTemperatureReevaluatesTheLastReading() async throws {
     let harness = try Harness()
-    let engine = harness.engine(EngineSources(transcriptSeed: { [] }, sampleTick: { TickFacts() }))
+    let engine = harness.engine(
+      EngineSources(transcriptSeed: { [] }, sampleTick: { TickFacts() }), settings: Self.protected)
     await engine.stepTemperature(.celsius(46))
     #expect(await engine.state.temperature.blocked)
-    #expect(await engine.apply(settings: Settings(temperatureReleaseCelsius: 55)))
+    #expect(await engine.apply(settings: Settings(temperatureProtectionEnabled: true, temperatureReleaseCelsius: 55)))
     #expect(await harness.waitForLine(containing: " TEMPERATURE unblock celsius=46 ", timeout: Self.lineSeconds))
     #expect(await engine.state.temperature.blocked == false)
   }
 
   @Test func turningTemperatureProtectionOffEndsATemperatureBlock() async throws {
     let harness = try Harness()
-    let engine = harness.engine(EngineSources(transcriptSeed: { [] }, sampleTick: { TickFacts() }))
+    let engine = harness.engine(
+      EngineSources(transcriptSeed: { [] }, sampleTick: { TickFacts() }), settings: Self.protected)
     await engine.stepTemperature(.celsius(50))
     #expect(await engine.state.temperature.blocked)
     #expect(await engine.apply(settings: Settings(temperatureProtectionEnabled: false)))
@@ -79,7 +82,7 @@ struct EngineTemperatureTests {
 
   @Test func theChangedKeysNameTheProtectionSettings() {
     let changed = Settings(
-      batteryProtectionEnabled: false, helperBatteryFloorPercent: 25, temperatureProtectionEnabled: false,
+      batteryProtectionEnabled: false, helperBatteryFloorPercent: 25, temperatureProtectionEnabled: true,
       temperatureReleaseCelsius: 50)
     #expect(
       Engine.changedKeys(from: Settings(), to: changed) == [

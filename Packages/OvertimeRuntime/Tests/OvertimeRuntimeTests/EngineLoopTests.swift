@@ -19,10 +19,13 @@ struct EngineLoopTests {
       logger = try FileLogger(decisionLog: paths.decisionLog(.shadow), errorLog: paths.errorLog(.shadow))
     }
 
-    func engine(_ sources: EngineSources, sampleTimeoutSeconds: Double = Timing.systemCallTimeoutSeconds) -> Engine {
+    func engine(
+      _ sources: EngineSources, sampleTimeoutSeconds: Double = Timing.systemCallTimeoutSeconds,
+      settings: Settings = Settings()
+    ) -> Engine {
       Engine(
         mode: .shadow,
-        settings: Settings(),
+        settings: settings,
         clock: clock,
         interpreter: RecordingInterpreter(logger: logger, timeZone: TimeZone(secondsFromGMT: 0)!),
         sources: sources,

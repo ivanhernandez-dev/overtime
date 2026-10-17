@@ -32,7 +32,7 @@ Claude Code keeps working when you step away, but your Mac doesn't know that: it
 - **Finds Claude Code on its own:** from its running sessions and the transcripts they write. There are no hooks and nothing to change in Claude Code, and several sessions and subagents at once are fine.
 - **Lets go when the work stops:** the Mac sleeps about three minutes after Claude's last activity. You can change the timing.
 - **Never stuck awake:** quitting Overtime restores normal sleep. If it crashes, hangs or is killed, a small watchdog restores it.
-- **Respects you and the battery:** Apple menu > Sleep works as usual with the lid open, and Sleep Now and Pause in the panel always let the Mac sleep. On battery, Overtime lets go at 10%, and when the battery reaches 45°C. You can change both limits or turn them off in Settings > Battery.
+- **Respects you and the battery:** Apple menu > Sleep works as usual with the lid open, and Sleep Now and Pause in the panel always let the Mac sleep. On battery, Overtime lets go at 10%. You can change that limit or turn it off in Settings > Battery, and turn on temperature protection there to also let go when the battery gets hot.
 - **Stays online with the lid closed (optional):** if the network drops, it can switch the Mac to your iPhone hotspot.
 - **Unplug Protection (optional):** a small helper keeps a closed Mac awake when the charger or an external display changes.
 - **Updates itself** once a day, with signed updates.
@@ -135,7 +135,7 @@ Settings has seven panes, in this order:
 - **Hold.** With the lid open, Overtime holds a standard macOS power assertion against idle sleep and renews it while Claude works. macOS drops it within five minutes if Overtime stops renewing it, and at once when Overtime exits. With the lid closed, it uses a public macOS power-management call that tells the Mac not to sleep on lid close, without administrator rights, and sets it again when macOS resets it.
 - **Watch.** A small watchdog process runs next to the app. If Overtime crashes, hangs or is killed, the watchdog restores normal sleep first and then reopens Overtime, at most 3 times in 10 minutes. A hold left behind is cleared the next time Overtime starts, and restarting the Mac clears the lid-close setting.
 - **Release.** The Mac sleeps about three minutes after Claude's last activity: the 2-minute Transcript window plus the 1-minute Release grace, both in Settings > Detection. With the lid closed and no external display, Overtime checks about 30 seconds after letting go that the Mac went to sleep, and asks for sleep if it didn't.
-- **Stay out of the way.** With the lid closed and no external display, the display turns off so the screen locks; an external display is never turned off, and you can keep the display on with "Keep display on while Claude works". On battery, Overtime lets go at 10% and holds again on power or at 20%, both in Settings > Battery, where you can also turn battery protection off. When the battery reaches 45°C, Overtime lets go until it cools below 40°C; you can change that temperature or turn temperature protection off. Apple menu > Sleep works as usual with the lid open, and Sleep Now and Pause in the panel always let the Mac sleep.
+- **Stay out of the way.** With the lid closed and no external display, the display turns off so the screen locks; an external display is never turned off, and you can keep the display on with "Keep display on while Claude works". On battery, Overtime lets go at 10% and holds again on power or at 20%, both in Settings > Battery, where you can also turn battery protection off. Temperature protection is off until you turn it on there; then, when the battery reaches 45°C, Overtime lets go until it cools below 40°C, and you can change that temperature. Apple menu > Sleep works as usual with the lid open, and Sleep Now and Pause in the panel always let the Mac sleep.
 
 Network failover is off until you choose your iPhone hotspot, during setup or in Settings > Network, or turn on Auto-detect iPhone hotspot. It acts only with the lid closed while Claude works. It checks every 10 seconds, asking api.anthropic.com and then captive.apple.com, with no cookies and no cache. After 3 failed checks it joins the hotspot, and it switches back to your usual network when you open the lid.
 
@@ -258,7 +258,7 @@ Only foreground Claude work counts, by design: background tasks and `/loop` wake
 <details>
 <summary>Is it safe to run with the lid closed in a bag?</summary>
 
-Overtime lets go about three minutes after Claude stops and at the battery limit, and if Overtime fails, its watchdog restores normal sleep. It also lets go when the battery reaches its temperature limit, and with Unplug Protection on, the helper lets go when the Mac or its battery gets too hot. Ventilation is still your call.
+Overtime lets go about three minutes after Claude stops and at the battery limit, and if Overtime fails, its watchdog restores normal sleep. With temperature protection on, it also lets go when the battery reaches its temperature limit, and with Unplug Protection on, the helper lets go when the Mac or its battery gets too hot. Ventilation is still your call.
 
 </details>
 

@@ -165,11 +165,11 @@ public struct EngineSnapshot: Sendable, Equatable {
     helperEngaged: Bool = false,
     helperFacts: HelperFacts? = nil,
     network: NetworkSummary? = nil,
-    batteryProtectionEnabled: Bool = true,
+    batteryProtectionEnabled: Bool = Settings().batteryProtectionEnabled,
     helperBatteryFloorPercent: Int = Settings().helperBatteryFloorPercent,
     temperatureBlocked: Bool = false,
     batteryTemperature: BatteryTemperatureReading? = nil,
-    temperatureProtectionEnabled: Bool = true,
+    temperatureProtectionEnabled: Bool = Settings().temperatureProtectionEnabled,
     temperatureReleaseCelsius: Int = Settings().temperatureReleaseCelsius,
     temperatureResumeCelsius: Int = Settings().temperatureResumeCelsius
   ) {

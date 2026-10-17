@@ -127,6 +127,7 @@ struct TemperatureTests {
 
   @Test func theReducerReleasesForAHotBatteryAndHoldsAgainWhenItCools() {
     var harness = ScenarioHarness()
+    harness.settings.temperatureProtectionEnabled = true
     _ = harness.activity(writtenAt: 0, seenAt: 0)
     _ = harness.tick(at: 0)
     #expect(harness.state.want.wanted == true)
