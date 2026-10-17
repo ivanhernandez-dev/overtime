@@ -25,6 +25,79 @@ struct SettingsTests {
     #expect(settings.temperatureProtectionEnabled == false)
     #expect(settings.temperatureReleaseCelsius == 45)
     #expect(settings.lidClosedKeepAwake == .always)
+    #expect(settings.pauseFirstMinutes == 15)
+    #expect(settings.pauseSecondMinutes == 60)
+    #expect(settings.keepAwakeFirstMinutes == 30)
+    #expect(settings.keepAwakeSecondMinutes == 120)
+  }
+
+  static let durationKeys = [
+    "pauseFirstMinutes", "pauseSecondMinutes", "keepAwakeFirstMinutes", "keepAwakeSecondMinutes",
+  ]
+
+  static func durations(_ settings: Settings) -> [String: Int] {
+    [
+      "pauseFirstMinutes": settings.pauseFirstMinutes,
+      "pauseSecondMinutes": settings.pauseSecondMinutes,
+      "keepAwakeFirstMinutes": settings.keepAwakeFirstMinutes,
+      "keepAwakeSecondMinutes": settings.keepAwakeSecondMinutes,
+    ]
+  }
+
+  static func settings(_ key: String, minutes: Int) -> Settings {
+    var settings = Settings()
+    switch key {
+    case "pauseFirstMinutes": settings.pauseFirstMinutes = minutes
+    case "pauseSecondMinutes": settings.pauseSecondMinutes = minutes
+    case "keepAwakeFirstMinutes": settings.keepAwakeFirstMinutes = minutes
+    case "keepAwakeSecondMinutes": settings.keepAwakeSecondMinutes = minutes
+    default: Issue.record("unknown duration key \(key)")
+    }
+    return settings
+  }
+
+  @Test func theDurationDefaultsAreTodaysChoices() {
+    let expected = [
+      "pauseFirstMinutes": 15, "pauseSecondMinutes": 60, "keepAwakeFirstMinutes": 30, "keepAwakeSecondMinutes": 120,
+    ]
+    #expect(Self.durations(Settings()) == expected)
+  }
+
+  @Test func aFileWithoutTheDurationKeysKeepsTodaysChoices() throws {
+    #expect(Self.durations(try decode(#"{"batteryLowPercent":15}"#)) == Self.durations(Settings()))
+  }
+
+  @Test func theDurationRangeIsOneMinuteToADay() {
+    #expect(Settings.presetMinutesRange == 1...1440)
+  }
+
+  @Test func theDurationsRoundTripThroughJSON() throws {
+    let settings = Settings(
+      pauseFirstMinutes: 45, pauseSecondMinutes: 90, keepAwakeFirstMinutes: 10, keepAwakeSecondMinutes: 1440)
+    let data = try JSONEncoder().encode(settings)
+    let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    #expect(object["pauseFirstMinutes"] as? Int == 45)
+    #expect(object["pauseSecondMinutes"] as? Int == 90)
+    #expect(object["keepAwakeFirstMinutes"] as? Int == 10)
+    #expect(object["keepAwakeSecondMinutes"] as? Int == 1440)
+    #expect(try JSONDecoder().decode(Settings.self, from: data) == settings)
+  }
+
+  @Test(arguments: durationKeys, [(-5, 1), (0, 1), (1, 1), (45, 45), (1440, 1440), (1441, 1440), (Int.max, 1440)])
+  func anOutOfRangeDurationIsClampedAndRecorded(_ key: String, _ pair: (value: Int, expected: Int)) {
+    let validation = Self.settings(key, minutes: pair.value).validated()
+    #expect(Self.durations(validation.settings)[key] == pair.expected)
+    let recorded = validation.adjustments.filter { $0.key == key }
+    if pair.value == pair.expected {
+      #expect(recorded.isEmpty)
+    } else {
+      #expect(recorded == [SettingsAdjustment(key: key, from: String(pair.value), to: String(pair.expected))])
+    }
+  }
+
+  @Test func aWrongTypeForADurationIsRejected() {
+    #expect(throws: (any Error).self) { try decode(#"{"pauseFirstMinutes":"15"}"#) }
+    #expect(throws: (any Error).self) { try decode(#"{"keepAwakeSecondMinutes":1.5}"#) }
   }
 
   @Test func aFileWithoutTheLidClosedKeyKeepsAlways() throws {

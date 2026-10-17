@@ -16,6 +16,10 @@ public struct Settings: Codable, Sendable, Equatable {
   public var temperatureProtectionEnabled: Bool
   public var temperatureReleaseCelsius: Int
   public var lidClosedKeepAwake: LidClosedKeepAwake
+  public var pauseFirstMinutes: Int
+  public var pauseSecondMinutes: Int
+  public var keepAwakeFirstMinutes: Int
+  public var keepAwakeSecondMinutes: Int
 
   public init(
     batteryLowPercent: Int = 10,
@@ -32,7 +36,11 @@ public struct Settings: Codable, Sendable, Equatable {
     helperBatteryFloorPercent: Int = 10,
     temperatureProtectionEnabled: Bool = false,
     temperatureReleaseCelsius: Int = 45,
-    lidClosedKeepAwake: LidClosedKeepAwake = .always
+    lidClosedKeepAwake: LidClosedKeepAwake = .always,
+    pauseFirstMinutes: Int = 15,
+    pauseSecondMinutes: Int = 60,
+    keepAwakeFirstMinutes: Int = 30,
+    keepAwakeSecondMinutes: Int = 120
   ) {
     self.batteryLowPercent = batteryLowPercent
     self.batteryResumePercent = batteryResumePercent
@@ -49,6 +57,10 @@ public struct Settings: Codable, Sendable, Equatable {
     self.temperatureProtectionEnabled = temperatureProtectionEnabled
     self.temperatureReleaseCelsius = temperatureReleaseCelsius
     self.lidClosedKeepAwake = lidClosedKeepAwake
+    self.pauseFirstMinutes = pauseFirstMinutes
+    self.pauseSecondMinutes = pauseSecondMinutes
+    self.keepAwakeFirstMinutes = keepAwakeFirstMinutes
+    self.keepAwakeSecondMinutes = keepAwakeSecondMinutes
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -67,6 +79,10 @@ public struct Settings: Codable, Sendable, Equatable {
     case temperatureProtectionEnabled
     case temperatureReleaseCelsius
     case lidClosedKeepAwake
+    case pauseFirstMinutes
+    case pauseSecondMinutes
+    case keepAwakeFirstMinutes
+    case keepAwakeSecondMinutes
   }
 
   public init(from decoder: any Decoder) throws {
@@ -105,6 +121,14 @@ public struct Settings: Codable, Sendable, Equatable {
     lidClosedKeepAwake =
       try container.decodeIfPresent(LidClosedKeepAwake.self, forKey: .lidClosedKeepAwake)
       ?? defaults.lidClosedKeepAwake
+    pauseFirstMinutes =
+      try container.decodeIfPresent(Int.self, forKey: .pauseFirstMinutes) ?? defaults.pauseFirstMinutes
+    pauseSecondMinutes =
+      try container.decodeIfPresent(Int.self, forKey: .pauseSecondMinutes) ?? defaults.pauseSecondMinutes
+    keepAwakeFirstMinutes =
+      try container.decodeIfPresent(Int.self, forKey: .keepAwakeFirstMinutes) ?? defaults.keepAwakeFirstMinutes
+    keepAwakeSecondMinutes =
+      try container.decodeIfPresent(Int.self, forKey: .keepAwakeSecondMinutes) ?? defaults.keepAwakeSecondMinutes
   }
 
   public static func defaultTranscriptRoots(environment: [String: String], homeDirectory: String) -> [String] {
@@ -156,6 +180,7 @@ extension Settings {
   public static let helperBatteryFloorRange = 5...50
   public static let temperatureReleaseRange = 35...60
   public static let temperatureResumeHysteresisCelsius = 5
+  public static let presetMinutesRange = 1...1440
 
   public var temperatureResumeCelsius: Int {
     temperatureReleaseCelsius - Self.temperatureResumeHysteresisCelsius
@@ -191,6 +216,17 @@ extension Settings {
     result.temperatureReleaseCelsius = min(
       max(temperatureReleaseCelsius, Self.temperatureReleaseRange.lowerBound), Self.temperatureReleaseRange.upperBound)
     record("temperatureReleaseCelsius", String(temperatureReleaseCelsius), String(result.temperatureReleaseCelsius))
+    func clampPreset(_ value: Int) -> Int {
+      min(max(value, Self.presetMinutesRange.lowerBound), Self.presetMinutesRange.upperBound)
+    }
+    result.pauseFirstMinutes = clampPreset(pauseFirstMinutes)
+    record("pauseFirstMinutes", String(pauseFirstMinutes), String(result.pauseFirstMinutes))
+    result.pauseSecondMinutes = clampPreset(pauseSecondMinutes)
+    record("pauseSecondMinutes", String(pauseSecondMinutes), String(result.pauseSecondMinutes))
+    result.keepAwakeFirstMinutes = clampPreset(keepAwakeFirstMinutes)
+    record("keepAwakeFirstMinutes", String(keepAwakeFirstMinutes), String(result.keepAwakeFirstMinutes))
+    result.keepAwakeSecondMinutes = clampPreset(keepAwakeSecondMinutes)
+    record("keepAwakeSecondMinutes", String(keepAwakeSecondMinutes), String(result.keepAwakeSecondMinutes))
     result.transcriptWindowSeconds = clamp(
       transcriptWindowSeconds, Self.transcriptWindowRange, fallback: defaults.transcriptWindowSeconds)
     record(
