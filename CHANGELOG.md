@@ -18,6 +18,7 @@ All notable changes to Overtime are listed here, in the Keep a Changelog format,
 ### Fixed
 
 - Claude Code sessions started through a wrapper, such as a terminal app's shim, are recognised. Before, a session that Overtime first saw while its wrapper was still starting was never counted as a working terminal session.
+- Claude Code's own `caffeinate`, and the ones its commands start, no longer show as another tool managing sleep.
 
 ## [1.0.0] - 2026-10-15
 

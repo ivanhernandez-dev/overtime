@@ -13,6 +13,11 @@ struct CoexistenceCaptureTests {
     ProcessRecord(pid: 90000, ppid: 1, uid: 501, comm: "claude", argv0: "claude"),
     ProcessRecord(pid: 90696, ppid: 90000, uid: 501, comm: "caffeinate"),
   ]
+  static let claudeCommandParented = [
+    ProcessRecord(pid: 90000, ppid: 1, uid: 501, comm: "claude", argv0: "claude"),
+    ProcessRecord(pid: 90100, ppid: 90000, uid: 501, comm: "zsh", argv0: "/bin/zsh", argv1: "-c"),
+    ProcessRecord(pid: 90696, ppid: 90100, uid: 501, comm: "caffeinate"),
+  ]
   static let shellParented = [
     ProcessRecord(pid: 90000, ppid: 1, uid: 501, comm: "zsh", argv0: "-zsh"),
     ProcessRecord(pid: 90696, ppid: 90000, uid: 501, comm: "caffeinate"),
@@ -107,6 +112,11 @@ struct CoexistenceCaptureTests {
   @Test func anOrdinaryMacReportsNoForeignAssertion() throws {
     #expect(CoexistenceProbe.claudeCaffeinatePIDs(in: Self.claudeParented) == [Self.caffeinatePID])
     #expect(try Self.foreign(Self.ordinaryRows(), processes: Self.claudeParented) == [])
+  }
+
+  @Test func aCaffeinateStartedByAClaudeCommandIsNotReportedBesideTheOrdinaryTable() throws {
+    #expect(CoexistenceProbe.claudeCaffeinatePIDs(in: Self.claudeCommandParented) == [Self.caffeinatePID])
+    #expect(try Self.foreign(Self.ordinaryRows(), processes: Self.claudeCommandParented) == [])
   }
 
   @Test func aListedToolBesideTheOrdinaryTableIsTheOnlyAssertionReported() throws {

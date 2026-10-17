@@ -128,6 +128,100 @@ struct CoexistenceProbeTests {
     #expect(CoexistenceProbe.claudeCaffeinatePIDs(in: [claude, shell, ours, theirs]) == [32])
   }
 
+  static let terminal: UInt32 = 0x1000_0003
+  static let terminalHost = ProcessRecord(pid: 28, ppid: 1, uid: 501, comm: "term-app")
+  static let loginShell = ProcessRecord(pid: 29, ppid: 28, uid: 501, comm: "zsh", ttyDevice: terminal, argv0: "-zsh")
+  static let claudeSession = ProcessRecord(
+    pid: 30, ppid: 29, uid: 501, comm: "2.1.302", ttyDevice: terminal, argv0: "/Users/dev/.local/bin/claude",
+    execPath: "/Users/dev/.local/bin/claude", pidPath: "/Users/dev/.local/share/claude/versions/2.1.302")
+  static let commandShell = ProcessRecord(
+    pid: 34, ppid: 30, uid: 501, comm: "zsh", ttyDevice: terminal, argv0: "/bin/zsh", argv1: "-c")
+
+  static func caffeinate(_ pid: Int32, parent: Int32, uid: UInt32 = 501) -> ProcessRecord {
+    ProcessRecord(pid: pid, ppid: parent, uid: uid, comm: "caffeinate")
+  }
+
+  @Test func aCaffeinateStartedByACommandClaudeRunsIsExcluded() {
+    let processes = [
+      Self.terminalHost, Self.loginShell, Self.claudeSession, Self.commandShell,
+      Self.caffeinate(35, parent: 34), Self.caffeinate(36, parent: 30),
+    ]
+    #expect(CoexistenceProbe.claudeCaffeinatePIDs(in: processes) == [35, 36])
+  }
+
+  @Test(arguments: 1...9)
+  func theWalkReachesAClaudeAncestorUpToItsDepthBound(steps: Int) {
+    var processes = [ProcessRecord(pid: 100, ppid: 1, uid: 501, comm: "claude", argv0: "claude")]
+    for offset in 1..<steps {
+      processes.append(
+        ProcessRecord(pid: Int32(100 + offset), ppid: Int32(99 + offset), uid: 501, comm: "zsh", argv0: "/bin/zsh"))
+    }
+    processes.append(Self.caffeinate(200, parent: Int32(99 + steps)))
+    #expect(CoexistenceProbe.claudeAncestorDepth == 8)
+    #expect(CoexistenceProbe.claudeCaffeinatePIDs(in: processes) == (steps <= 8 ? [200] : []))
+  }
+
+  @Test func aCaffeinateWithoutAClaudeAncestorStillCounts() {
+    let shell = ProcessRecord(pid: 40, ppid: 29, uid: 501, comm: "zsh", ttyDevice: Self.terminal, argv0: "/bin/zsh")
+    let processes = [
+      Self.terminalHost, Self.loginShell, shell, Self.caffeinate(41, parent: 40), Self.caffeinate(42, parent: 29),
+      Self.caffeinate(43, parent: 28),
+    ]
+    #expect(CoexistenceProbe.claudeCaffeinatePIDs(in: processes).isEmpty)
+  }
+
+  @Test func anAncestorThatCannotBeClassifiedCountsAsNotClaude() {
+    let processes = [
+      ProcessRecord(pid: 50, ppid: 1, uid: 501, comm: "2.1.302"),
+      ProcessRecord(pid: 51, ppid: 50, uid: 501, comm: "zsh", argv0: "/bin/zsh"),
+      ProcessRecord(pid: 54, ppid: 1, uid: 501, comm: "claude"),
+      ProcessRecord(pid: 55, ppid: 54, uid: 501, comm: "zsh"),
+      Self.caffeinate(52, parent: 51), Self.caffeinate(53, parent: 50), Self.caffeinate(56, parent: 55),
+      Self.caffeinate(57, parent: 54),
+    ]
+    #expect(CoexistenceProbe.claudeCaffeinatePIDs(in: processes).isEmpty)
+  }
+
+  @Test func aCycleOrAMissingParentEndsTheWalk() {
+    let processes = [
+      ProcessRecord(pid: 60, ppid: 61, uid: 501, comm: "zsh", argv0: "/bin/zsh"),
+      ProcessRecord(pid: 61, ppid: 60, uid: 501, comm: "zsh", argv0: "/bin/zsh"),
+      ProcessRecord(pid: 64, ppid: 64, uid: 501, comm: "zsh", argv0: "/bin/zsh"),
+      Self.caffeinate(62, parent: 60), Self.caffeinate(63, parent: 999), Self.caffeinate(65, parent: 64),
+      ProcessRecord(pid: 66, ppid: 66, uid: 501, comm: "caffeinate"),
+    ]
+    #expect(CoexistenceProbe.claudeCaffeinatePIDs(in: processes).isEmpty)
+  }
+
+  @Test func anAncestorOfAnotherUserEndsTheWalk() {
+    let processes = [
+      ProcessRecord(pid: 70, ppid: 1, uid: 502, comm: "claude", argv0: "claude"),
+      ProcessRecord(pid: 71, ppid: 70, uid: 501, comm: "zsh", argv0: "/bin/zsh"),
+      Self.caffeinate(72, parent: 71), Self.caffeinate(73, parent: 70),
+    ]
+    #expect(CoexistenceProbe.claudeCaffeinatePIDs(in: processes).isEmpty)
+  }
+
+  @Test func theWalkStopsAtLaunchd() {
+    let processes = [
+      ProcessRecord(pid: 1, ppid: 0, uid: 501, comm: "claude", argv0: "claude"),
+      ProcessRecord(pid: 80, ppid: 1, uid: 501, comm: "zsh", argv0: "/bin/zsh"),
+      Self.caffeinate(81, parent: 80), Self.caffeinate(82, parent: 1),
+    ]
+    #expect(CoexistenceProbe.claudeCaffeinatePIDs(in: processes).isEmpty)
+  }
+
+  @Test func busyDetectionStillCountsOnlyDirectChildren() {
+    let processes = [
+      Self.terminalHost, Self.loginShell, Self.claudeSession, Self.commandShell, Self.caffeinate(35, parent: 34),
+    ]
+    #expect(ClaudeCodeDetector.busySessionPIDs(in: processes).isEmpty)
+    #expect(ClaudeCodeDetector(userID: 501).signals(from: processes).busyProcessCount == 0)
+    let direct = processes + [Self.caffeinate(36, parent: 30)]
+    #expect(ClaudeCodeDetector.busySessionPIDs(in: direct) == [30])
+    #expect(ClaudeCodeDetector(userID: 501).signals(from: direct).busyProcessCount == 1)
+  }
+
   @Test func aForeignCaffeinateIsNamedWithTheProcessThatStartedIt() {
     let processes = [
       ProcessRecord(pid: 40, ppid: 1, uid: 501, comm: "python3"),

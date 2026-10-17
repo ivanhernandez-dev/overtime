@@ -42,6 +42,8 @@ public struct CoexistenceProbe: Sendable {
     processes.contains { $0.pidPath?.contains(amphetamineExecutableMarker) == true }
   }
 
+  public static let claudeAncestorDepth = 8
+
   public static func claudeCaffeinatePIDs(in processes: [ProcessRecord]) -> Set<Int32> {
     var byPID: [Int32: ProcessRecord] = [:]
     for record in processes {
@@ -49,11 +51,24 @@ public struct CoexistenceProbe: Sendable {
     }
     return Set(
       processes.compactMap { record in
-        guard record.comm == "caffeinate", let parent = byPID[record.ppid], ClaudeCodeDetector.isClaude(parent) else {
-          return nil
-        }
+        guard record.comm == "caffeinate", hasClaudeAncestor(record, in: byPID) else { return nil }
         return record.pid
       })
+  }
+
+  private static func hasClaudeAncestor(_ record: ProcessRecord, in byPID: [Int32: ProcessRecord]) -> Bool {
+    var visited: Set<Int32> = [record.pid]
+    var current = record
+    for _ in 0..<claudeAncestorDepth {
+      guard current.ppid > 1, visited.insert(current.ppid).inserted, let parent = byPID[current.ppid],
+        parent.uid == record.uid
+      else { return false }
+      if ClaudeCodeDetector.isClaude(parent) {
+        return true
+      }
+      current = parent
+    }
+    return false
   }
 
   public static func isIdleOnly(_ assertion: ForeignAssertion) -> Bool {
