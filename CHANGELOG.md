@@ -15,6 +15,10 @@ All notable changes to Overtime are listed here, in the Keep a Changelog format,
 
 - The unplug protection helper changed (helper version 2). After the update, macOS asks once to allow it again under Allow in the Background.
 
+### Fixed
+
+- Claude Code sessions started through a wrapper, such as a terminal app's shim, are recognised. Before, a session that Overtime first saw while its wrapper was still starting was never counted as a working terminal session.
+
 ## [1.0.0] - 2026-10-15
 
 ### Added

@@ -4,10 +4,21 @@ import OvertimeCore
 import os
 
 public struct ProcessScanner: Sendable {
+  struct Entry: Sendable, Equatable {
+    var pid: Int32
+    var ppid: Int32
+    var uid: UInt32
+    var comm: String
+    var ttyDevice: UInt32
+    var startSeconds: UInt64
+    var startMicroseconds: UInt64
+  }
+
   private struct Identity: Hashable, Sendable {
     var pid: Int32
     var startSeconds: UInt64
     var startMicroseconds: UInt64
+    var comm: String
   }
 
   private struct Details: Sendable {
@@ -26,6 +37,7 @@ public struct ProcessScanner: Sendable {
   private let cache = DetailsCache()
   private let readArgs: @Sendable (Int32) -> [UInt8]?
   private let readPath: @Sendable (Int32) -> String?
+  private let readEntries: @Sendable () -> [Entry]
 
   public init(userID: UInt32) {
     self.init(userID: userID, readArgs: ProcessScanner.procArgs, readPath: ProcessScanner.pidPath)
@@ -33,47 +45,46 @@ public struct ProcessScanner: Sendable {
 
   init(
     userID: UInt32, readArgs: @escaping @Sendable (Int32) -> [UInt8]?,
-    readPath: @escaping @Sendable (Int32) -> String?
+    readPath: @escaping @Sendable (Int32) -> String?,
+    readEntries: @escaping @Sendable () -> [Entry] = ProcessScanner.liveEntries
   ) {
     self.userID = userID
     self.readArgs = readArgs
     self.readPath = readPath
+    self.readEntries = readEntries
   }
 
   public func sample(clock: any ClockPort = SystemClock(), extraCandidates: Set<Int32> = []) -> [ProcessRecord] {
     let monoNow = clock.mono()
     let wallNow = clock.wall().timeIntervalSince1970
-    var infos: [(pid: Int32, info: proc_bsdinfo)] = []
-    for pid in ProcessScanner.allPIDs() {
-      guard let info = ProcessScanner.bsdInfo(pid), info.pbi_uid == userID else { continue }
-      infos.append((pid, info))
-    }
+    let entries = readEntries().filter { $0.uid == userID }
     var candidates = extraCandidates
-    for (pid, info) in infos {
-      let comm = ProcessScanner.comm(info)
-      if comm == "caffeinate" {
-        candidates.insert(pid)
-        candidates.insert(Int32(bitPattern: info.pbi_ppid))
+    for entry in entries {
+      if entry.comm == "caffeinate" {
+        candidates.insert(entry.pid)
+        candidates.insert(entry.ppid)
       }
-      if comm == ProcessScanner.amphetamineComm {
-        candidates.insert(pid)
+      if entry.comm == ProcessScanner.amphetamineComm {
+        candidates.insert(entry.pid)
       }
-      if info.e_tdev != ProcessRecord.noDevice {
-        candidates.insert(pid)
+      if entry.ttyDevice != ProcessRecord.noDevice {
+        candidates.insert(entry.pid)
       }
     }
     var seen: Set<Identity> = []
     var records: [ProcessRecord] = []
-    records.reserveCapacity(infos.count)
-    for (pid, info) in infos {
-      let identity = Identity(pid: pid, startSeconds: info.pbi_start_tvsec, startMicroseconds: info.pbi_start_tvusec)
-      let startWall = Double(info.pbi_start_tvsec) + Double(info.pbi_start_tvusec) / 1_000_000
+    records.reserveCapacity(entries.count)
+    for entry in entries {
+      let pid = entry.pid
+      let identity = Identity(
+        pid: pid, startSeconds: entry.startSeconds, startMicroseconds: entry.startMicroseconds, comm: entry.comm)
+      let startWall = Double(entry.startSeconds) + Double(entry.startMicroseconds) / 1_000_000
       var record = ProcessRecord(
         pid: pid,
-        ppid: Int32(bitPattern: info.pbi_ppid),
-        uid: info.pbi_uid,
-        comm: ProcessScanner.comm(info),
-        ttyDevice: info.e_tdev,
+        ppid: entry.ppid,
+        uid: entry.uid,
+        comm: entry.comm,
+        ttyDevice: entry.ttyDevice,
         startMono: monoNow.adding(seconds: -max(0, wallNow - startWall))
       )
       if candidates.contains(pid) {
@@ -104,6 +115,21 @@ public struct ProcessScanner: Sendable {
     )
     cache.entries.withLock { $0[identity] = fresh }
     return fresh
+  }
+
+  static func liveEntries() -> [Entry] {
+    ProcessScanner.allPIDs().compactMap { pid in
+      guard let info = ProcessScanner.bsdInfo(pid) else { return nil }
+      return Entry(
+        pid: pid,
+        ppid: Int32(bitPattern: info.pbi_ppid),
+        uid: info.pbi_uid,
+        comm: ProcessScanner.comm(info),
+        ttyDevice: info.e_tdev,
+        startSeconds: info.pbi_start_tvsec,
+        startMicroseconds: info.pbi_start_tvusec
+      )
+    }
   }
 
   private static func allPIDs() -> [Int32] {
