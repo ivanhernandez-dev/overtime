@@ -1,6 +1,6 @@
 # Releasing Overtime
 
-This is the maintainer's checklist for publishing Overtime. Everything here is done by the author, by hand or from the repository's Actions tab. On 2026-10-15 the tap, the `release` environment, the helper pin and the four secrets exist, and no `v*` tag and no release exist yet.
+This is the maintainer's checklist for publishing Overtime. Everything here is done by the author, by hand or from the repository's Actions tab. The `release` environment, the helper pin and the three secrets the release needs exist, and v1.0.0 is published.
 
 The release itself runs in CI from versioned scripts, so CI and a local dry-run run the same code:
 
@@ -49,26 +49,23 @@ With `SURequireSignedFeed` and `SUVerifyUpdateBeforeExtraction` both on, the EdD
 
 ## One-time setup
 
-1. **The tap.** **Done on 2026-10-15:** `ivanhernandez-dev/homebrew-tap` exists with `main` as its default branch, a README, and a ruleset that blocks force pushes and deletion only. Create `ivanhernandez-dev/homebrew-tap` with a `Casks/` folder. As the last step of every release, `publish.sh` commits `Casks/overtime.rb` directly to the tap's default branch, through the contents API with `HOMEBREW_TAP_TOKEN`; it opens no pull request. That branch must let the token push directly, so protect it against force pushes and deletion only ("Block force pushes" and "Restrict deletions"). Do not require pull requests, status checks or signed commits, and add no ruleset that the token cannot pass. Any of those makes every release fail at the last step, with the release published and the tap still on the previous cask.
+1. **The cask.** `Casks/overtime.rb` in this repository is Overtime's Homebrew cask, so the repository is its own tap: `brew tap ivanhernandez-dev/overtime https://github.com/ivanhernandez-dev/overtime`, then `brew install --cask ivanhernandez-dev/overtime/overtime`. Homebrew needs the address because the repository's name does not start with `homebrew-`. As the last step of every release, `publish.sh` commits `Casks/overtime.rb` to `main` of this repository through the contents API, with the message "Update the cask to X.Y.Z" and the release job's own workflow token; it opens no pull request and needs no secret. Keep `main` free of any rule that token cannot pass (required pull requests, required status checks, signed commits), or every release fails at its last step, with the release published and the cask still on the previous version. The cask is always `packaging/homebrew/overtime.rb.template` rendered for one published version, and `ReleaseSourceGateTests` fails when the two disagree: when you change the template, change `Casks/overtime.rb` the same way in the same commit, keeping its version and `sha256`.
 2. **The `release` environment** in this repository. **Done on 2026-10-15:** you are the required reviewer (self-review allowed) and a deployment rule allows only `v*` tags. `release.yml` runs only on a `v*` tag, from a tag push or from a dispatch on the tag (Cut release starts it that way), and only behind this environment's approval. The environment's tag rule and the job's own tag check both refuse any other ref.
-3. **The four secrets**, in the `release` environment only (never repository-wide):
+3. **The three secrets**, in the `release` environment only (never repository-wide):
    - `T1_P12_BASE64`: the T1 certificate and its private key exported as `.p12` (ADR 0008), base64-encoded on one line;
    - `T1_P12_PASSWORD`: the password of that `.p12`;
    - `SPARKLE_ED_PRIVATE_KEY`: the EdDSA private key as one line, the base64 seed;
-   - `HOMEBREW_TAP_TOKEN`: a fine-grained token with Contents read and write on the tap repository only.
 
-   You set them yourself, never an agent. `gh secret list --env release --repo ivanhernandez-dev/overtime` lists the names that are set and never a value. On 2026-10-15 it listed all four: `T1_P12_BASE64`, `T1_P12_PASSWORD`, `SPARKLE_ED_PRIVATE_KEY` and `HOMEBREW_TAP_TOKEN`. To rotate or replace a secret, run its command from your Mac. Each one reads from your offline backup folder or a hidden prompt and prints nothing secret:
+   You set them yourself, never an agent. `gh secret list --env release --repo ivanhernandez-dev/overtime` lists the names that are set and never a value. It must list exactly `T1_P12_BASE64`, `T1_P12_PASSWORD` and `SPARKLE_ED_PRIVATE_KEY`. To rotate or replace a secret, run its command from your Mac. Each one reads from your offline backup folder or a hidden prompt and prints nothing secret:
 
    ```sh
    base64 -i <the T1 .p12 in your offline backup folder> | tr -d '\n' | gh secret set T1_P12_BASE64 --env release --repo ivanhernandez-dev/overtime
    gh secret set T1_P12_PASSWORD --env release --repo ivanhernandez-dev/overtime
    tr -d '\n' < <the EdDSA private key file in your offline backup folder> | gh secret set SPARKLE_ED_PRIVATE_KEY --env release --repo ivanhernandez-dev/overtime
-   gh secret set HOMEBREW_TAP_TOKEN --env release --repo ivanhernandez-dev/overtime
    ```
 
    - `gh secret set T1_P12_PASSWORD` asks for the value with hidden input.
    - `tr -d '\n'` strips the newlines, so the `.p12` secret is one base64 line and the EdDSA secret is the one-line seed.
-   - Before setting `HOMEBREW_TAP_TOKEN`, make the token on github.com: Settings > Developer settings > Personal access tokens > Fine-grained tokens > Generate new token. Resource owner `ivanhernandez-dev`. Set an expiration and write it down: a release after that date fails at the tap step (see "If publishing fails"). Repository access "Only select repositories", with `ivanhernandez-dev/homebrew-tap` only. Repository permissions "Contents: Read and write" (GitHub adds read-only Metadata). Copy the token once and paste it at the prompt.
    - Never pass a secret value as a command argument, because it lands in the shell history and the process list, and never print it. Running a command again replaces the secret, which is also how to rotate it.
 4. **Optional:** turn on immutable releases in the repository settings, if GitHub offers it, so a published release's tag and assets cannot change.
 5. **Runners.** CI and Release run on GitHub's hosted `xcode-27` image, and Cut release on `macos-26`. Never register a self-hosted runner with the `xcode-27` label: such a machine would pick up the CI jobs on that label, including pull-request code, and the release job with its secrets. The `xcode-27` CI leg runs only for pushes and same-repository pull requests; pull requests from forks get the `macos-26` package tests only.
@@ -135,7 +132,7 @@ The release log must show:
 - the Sparkle revision and the tool digests matching `scripts/release/pins.env`;
 - every Mach-O arm64-only with a `minos` of 14.0 or lower;
 - the feed and enclosure signatures verified against the app's own `SUPublicEDKey`;
-- `publish: draft created`, `publish: assets uploaded`, `publish: published as latest`, then the tap update.
+- `publish: draft created`, `publish: assets uploaded`, `publish: published as latest`, then `publish: cask updated` (or `publish: cask already current` when `main` already has the same cask).
 
 ### If the cut fails
 
@@ -145,24 +142,24 @@ A refusal, or a push rejected because `main` moved since the checkout, changes n
 
 `publish.sh` prints `publish: refused: <reason>` when a precondition fails, and `publish: failed: <reason>` when a step fails.
 
-- **Before "published as latest":** the release stays a draft and the tap is untouched. Delete the draft (keep the tag), fix the cause, then re-run the job.
-- **After "published as latest":** the release is public and the tap still has the previous cask. Re-running the job does not help, because `gh release create` refuses an existing release. Commit the cask to the tap by hand, rendered from the published zip's checksum in `SHA256SUMS`.
+- **Before "published as latest":** the release stays a draft and the cask is untouched. Delete the draft (keep the tag), fix the cause, then re-run the job.
+- **After "published as latest":** the release is public and `Casks/overtime.rb` on `main` still has the previous version. Re-running the job does not help, because `gh release create` refuses an existing release. Commit the cask to `main` yourself, with the message "Update the cask to X.Y.Z": `packaging/homebrew/overtime.rb.template` with `{{VERSION}}` replaced by the version and `{{ZIP_SHA256}}` by the zip's checksum from the published `SHA256SUMS`.
 
 ## After publishing
 
 1. `curl -sIL https://github.com/ivanhernandez-dev/overtime/releases/latest/download/appcast.xml` ends in `200`. Every shipped build reads its feed from this URL, so a broken redirect strands users; check it before announcing the release.
 2. Download every asset into one folder and run `shasum -a 256 -c SHA256SUMS`.
-3. Check the tap commit, then run `brew style --cask` and `brew audit --cask ivanhernandez-dev/tap/overtime` against the published cask.
+3. Pull `main`, which now has the "Update the cask to X.Y.Z" commit, then run `brew update`, `brew style --cask ivanhernandez-dev/overtime/overtime` and `brew audit --cask ivanhernandez-dev/overtime/overtime` against the published cask.
 
 ## Human verification list
 
 These checks need a person and real hardware, and are never faked. Each is on the WINDOWS ledger.
 
-1. Create the tap, the `release` environment and its secrets (One-time setup). The tap, the environment and the four secrets exist since 2026-10-15: confirm the four names with `gh secret list --env release --repo ivanhernandez-dev/overtime`, write down the tap token's expiry, and make sure the token reaches only `ivanhernandez-dev/homebrew-tap`.
+1. Create the `release` environment and its secrets (One-time setup). The environment and the secrets exist since 2026-10-15: confirm with `gh secret list --env release --repo ivanhernandez-dev/overtime` that it lists `T1_P12_BASE64`, `T1_P12_PASSWORD` and `SPARKLE_ED_PRIVATE_KEY` and nothing else.
 2. Produce the real helper pin with the T1 identity and commit it (Pin the helper). Done on 2026-10-15.
-3. Release v0.1.0 with the Cut release button (or by hand) and read the log as in "Read the release log"; check the assets and the tap commit.
+3. Release v0.1.0 with the Cut release button (or by hand) and read the log as in "Read the release log"; check the assets and the "Update the cask to X.Y.Z" commit on `main`.
 4. Install from the DMG and from the zip on macOS 15 or later (blocked once, then Open Anyway) and on macOS 14 (Control-click, Open).
-5. `brew install --cask ivanhernandez-dev/tap/overtime` on a Mac without the tap: record whether it taps by itself and the exact Tap Trust output, and the Gatekeeper behaviour.
+5. `brew tap ivanhernandez-dev/overtime https://github.com/ivanhernandez-dev/overtime`, then `brew install --cask ivanhernandez-dev/overtime/overtime`, on a Mac that has not tapped it: record the exact Tap Trust output, and the Gatekeeper behaviour.
 6. Build from source as the README says, on a clean Mac.
 7. Update v0.1.0 to v0.1.1 through the `latest/download` redirect with the signed feed. The login item, Notifications, Location and the installed helper all survive, with no re-approval and no App Management prompt; About shows 0.1.1 (101).
 8. A scheduled update found while Overtime is not in focus shows the reminder row in the panel and the About badge, and no notification.
@@ -267,7 +264,7 @@ A-1 to A-6 come first: they block the first publish, and Step 2 needs a publishe
 - **Do:**
   1. Leave Overtime out of focus until a scheduled check finds the update (item 8 of the human verification list), then install it from Sparkle's window while keep-awake holds (items 7 and 9).
   2. The in-app uninstall in every case of item 10, including a staged automatic update, and `/Applications/Overtime.app/Contents/MacOS/Overtime --uninstall` with and without `--purge`.
-  3. `brew install --cask ivanhernandez-dev/tap/overtime` on a Mac without the tap, then `brew uninstall --zap --cask overtime` (items 5 and 12), and `scripts/uninstall.sh` with the app present and after deleting it (item 11).
+  3. `brew tap ivanhernandez-dev/overtime https://github.com/ivanhernandez-dev/overtime` and `brew install --cask ivanhernandez-dev/overtime/overtime` on a Mac that has not tapped it, then `brew uninstall --zap --cask overtime` (items 5 and 12), and `scripts/uninstall.sh` with the app present and after deleting it (item 11).
   4. The macOS 14 floor run (item 13).
 - **Expect:** each result that items 5 and 7 to 13 of the human verification list state. In short: the signed feed is accepted; the login item, Notifications, Location and the helper survive the update with no re-approval and no App Management prompt; About shows the new version; the hold resumes after the relaunch and one Overtime process runs; the reminder shows in the panel and on About, with no notification. Each uninstall leaves no helper job, no purge path and no `Overtime.app` brought back by a staged update; record whether the Login Items row survives the paths where the app is already gone.
 - **Judged by:** About; `ps`; `pmset -g`; System Settings > General > Login Items & Extensions; a listing of the purge paths; the decision log.

@@ -48,15 +48,11 @@ Intel Macs and macOS 13 are not supported. Staying on one architecture and a rec
 ### Homebrew
 
 ```sh
-brew install --cask ivanhernandez-dev/tap/overtime
+brew tap ivanhernandez-dev/overtime https://github.com/ivanhernandez-dev/overtime
+brew install --cask ivanhernandez-dev/overtime/overtime
 ```
 
-Homebrew asks you to trust a tap before it installs from it. Installing by the full name trusts this cask. If Homebrew asks you to trust the tap first, run these, then the install command again:
-
-```sh
-brew tap ivanhernandez-dev/tap
-brew trust --cask ivanhernandez-dev/tap/overtime
-```
+The cask lives in this repository, so the first command adds the repository as a tap. Installing by the full name trusts only this cask, so Homebrew's Tap Trust needs no extra step.
 
 Overtime updates itself, so `brew upgrade` leaves it alone.
 
@@ -67,7 +63,7 @@ Get the latest release from [GitHub Releases](https://github.com/ivanhernandez-d
 - **Disk image:** open `Overtime-X.Y.Z.dmg` and drag Overtime to Applications.
 - **Zip:** open `Overtime-X.Y.Z.zip` and move `Overtime.app` to Applications.
 
-Download Overtime only from this repository's Releases or the Homebrew tap above. To check a download, see [Security](#security).
+Download Overtime only from this repository's Releases or with the Homebrew commands above. To check a download, see [Security](#security).
 
 ### First launch
 
@@ -265,7 +261,7 @@ Overtime lets go about three minutes after Claude stops and at the battery limit
 <details>
 <summary>Why isn't it on the App Store?</summary>
 
-Overtime is not sandboxed. It is distributed through GitHub Releases and its Homebrew tap.
+Overtime is not sandboxed. It is distributed through GitHub Releases and the Homebrew cask in this repository.
 
 </details>
 

@@ -9,11 +9,22 @@ struct PublicFaceGateTests {
   static let license = "LICENSE"
   static let changelog = "CHANGELOG.md"
 
+  static let oldTap = "ivanhernandez-dev" + "/tap"
+  static let oldTapRepository = "homebrew" + "-tap"
+  static let oldTapSecret = "HOMEBREW_" + "TAP_TOKEN"
+  static let tapCommand = "brew tap ivanhernandez-dev/overtime https://github.com/ivanhernandez-dev/overtime"
+  static let installCommand = "brew install --cask ivanhernandez-dev/overtime/overtime"
+  static let plantedOldInstall = "brew install --cask " + oldTap + "/overtime"
+  static let plantedOldTap = "brew tap " + oldTap
+  static let plantedOldSecret = "Set " + oldTapSecret + " first."
+  static let plantedOldTapRepository = "Create ivanhernandez-dev/" + oldTapRepository + "."
+
   static let readmePhrases = [
     "Keeps your Mac awake while Claude Code works, with the lid open or closed.",
     "Works with Claude Code. Not affiliated with Anthropic.",
     "Apple Silicon and macOS 14+ only",
-    "brew install --cask ivanhernandez-dev/tap/overtime",
+    tapCommand,
+    installCommand,
     "Open Anyway",
     "Control-click",
     "brew uninstall --zap --cask overtime",
@@ -33,6 +44,8 @@ struct PublicFaceGateTests {
     "--no-quarantine",
     "Keeps your Mac awake with the lid closed while Claude Code is working",
     "one minute by default",
+    oldTap,
+    oldTapRepository,
   ]
 
   static let readmeIcon = "Resources/Assets.xcassets/AppIcon.appiconset/icon_256.png"
@@ -113,11 +126,12 @@ struct PublicFaceGateTests {
       "pin-helper.sh",
       "T1_P12_BASE64",
       "SPARKLE_ED_PRIVATE_KEY",
-      "HOMEBREW_TAP_TOKEN",
+      "Update the cask to X.Y.Z",
       "macOS 14",
       "Never register a self-hosted runner with the `xcode-27` label",
-      "commits `Casks/overtime.rb` directly to the tap's default branch",
-      "protect it against force pushes and deletion only",
+      "`publish.sh` commits `Casks/overtime.rb` to `main` of this repository",
+      "with the release published and the cask still on the previous version",
+      installCommand,
       beforeOneZero,
       "scripts/energy/sample.sh",
       "scripts/energy/report.sh",
@@ -131,7 +145,9 @@ struct PublicFaceGateTests {
       "your offline backup folder",
     ] + [1, 2, 3, 4, 5, 6, 8, 9, 10, 11].map { "### A-\($0):" } + runbookSteps
 
-  static let releasingForbidden = ["/Users/", "Documents/Keys", "--body"]
+  static let releasingForbidden = [
+    "/Users/", "Documents/Keys", "--body", oldTapSecret, oldTapRepository, oldTap + "/",
+  ]
 
   static let humanVerification = "## Human verification list"
   static let beforeOneZero = "## Before 1.0.0"
@@ -267,7 +283,8 @@ struct PublicFaceGateTests {
   @Test(arguments: [
     "Works with Claude Code. Not affiliated with Anthropic.",
     "Apple Silicon and macOS 14+ only",
-    "brew install --cask ivanhernandez-dev/tap/overtime",
+    tapCommand,
+    installCommand,
     "Overtime collects no telemetry.",
     "about three minutes",
     "sudo pmset -a disablesleep 0",
@@ -280,9 +297,11 @@ struct PublicFaceGateTests {
   @Test(arguments: [
     "xattr -dr com.apple.quarantine /Applications/Overtime.app",
     "Run `XATTR -c Overtime.app` if macOS refuses to open it.",
-    "brew install --cask --no-quarantine ivanhernandez-dev/tap/overtime",
+    "brew install --cask --no-quarantine ivanhernandez-dev/overtime/overtime",
     "Keeps your Mac awake with the lid closed while Claude Code is working, and lets it sleep.",
     "When the work stops, the Mac sleeps again after a short grace period, one minute by default.",
+    plantedOldInstall,
+    plantedOldTap,
   ])
   func theReadmeGateCatchesAQuarantineRecipeOrTheOldLine(line: String) throws {
     let changed = Self.appending(try Self.read(Self.readme), line)
@@ -306,10 +325,11 @@ struct PublicFaceGateTests {
   @Test(arguments: [
     "### A-6:",
     "### A-1:",
-    "HOMEBREW_TAP_TOKEN",
+    "Update the cask to X.Y.Z",
     "Never register a self-hosted runner with the `xcode-27` label",
     "Works with Claude Code. Not affiliated with Anthropic. Apple Silicon and macOS 14+ only.",
-    "protect it against force pushes and deletion only",
+    "with the release published and the cask still on the previous version",
+    "`publish.sh` commits `Casks/overtime.rb` to `main` of this repository",
     "### Step 6:",
     "scripts/energy/report.sh",
     "cut-release.yml",
@@ -324,7 +344,10 @@ struct PublicFaceGateTests {
   @Test(arguments: [
     "cp /Users/someone/backup/overtime-t1.p12 .",
     "cat ~/Documents/Keys/overtime/sparkle-ed25519-private.key",
-    "gh secret set HOMEBREW_TAP_TOKEN --env release --body github_pat_planted",
+    "gh secret set T1_P12_PASSWORD --env release --body planted",
+    plantedOldInstall,
+    plantedOldSecret,
+    plantedOldTapRepository,
   ])
   func theReleaseChecklistGateCatchesAForbiddenLine(line: String) throws {
     let changed = Self.appending(try Self.read(Self.releasing), line)
