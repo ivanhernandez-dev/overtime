@@ -47,7 +47,7 @@ struct LabelCaseTests {
     labels += [HelperStatusPresentation.removeConfirmationConfirm, HelperStatusPresentation.removeConfirmationKeep]
     labels += [
       OnboardingFlow.continueLabel, OnboardingFlow.backLabel, OnboardingFlow.skipLabel, OnboardingFlow.finishLabel,
-      OnboardingFlow.allowNotificationsLabel, OnboardingFlow.allowLocationLabel, OnboardingFlow.installHelperLabel,
+      OnboardingFlow.allowNotificationsLabel, OnboardingFlow.allowLocationLabel,
     ]
     labels += CheckRow.Link.allCases.map(\.label)
     labels += [
@@ -62,7 +62,7 @@ struct LabelCaseTests {
 
   @Test func everySharedButtonMenuAndPaneLabelReadsInTitleCase() {
     let labels = Self.sharedLabels()
-    #expect(labels.count == 58)
+    #expect(labels.count == 57)
     #expect(Set(labels).count == 52)
     for label in labels {
       #expect(Self.titleCaseFindings(label) == [], "\(label)")

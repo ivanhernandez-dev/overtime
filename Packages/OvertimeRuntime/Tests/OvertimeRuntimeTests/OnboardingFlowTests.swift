@@ -16,9 +16,9 @@ struct OnboardingFlowTests {
       step: .welcome, title: "Welcome to Overtime", symbol: "laptopcomputer",
       body: "Overtime keeps your Mac awake while Claude Code works, and lets it sleep when the work is done."),
     StepCopy(
-      step: .launchAtLogin, title: "Start at login", symbol: "power",
+      step: .launchAtLogin, title: "Launch at login", symbol: "power",
       body:
-        "Overtime needs to be running to keep the Mac awake. Starting it at login means you never have to remember."
+        "Overtime needs to be running to keep the Mac awake. Launching it at login means you never have to remember."
     ),
     StepCopy(
       step: .notifications, title: "Notifications", symbol: "bell.badge",
@@ -31,12 +31,14 @@ struct OnboardingFlowTests {
         "Location is optional. Hotspot failover works without it, but with Location access, Overtime can find and join your iPhone hotspot directly. Overtime never stores or sends your location."
     ),
     StepCopy(
-      step: .checks, title: "Check your setup", symbol: "checklist",
-      body: "A few macOS settings affect how well Overtime works."),
+      step: .checks, title: "Recommended macOS settings", symbol: "checklist",
+      body:
+        "A few macOS settings affect how well Overtime works. You can change them now or later, and you can finish setup either way."
+    ),
     StepCopy(
       step: .unplugProtection, title: "Unplug protection (optional)", symbol: "powerplug",
       body:
-        "With the lid closed, macOS can still sleep when you unplug the charger or a display, even while Claude works. Unplug protection prevents this with a small helper that runs as an administrator."
+        "With the lid closed, macOS can still sleep when you unplug the charger or a display, even while Claude works. Unplug protection prevents this with a small helper that runs as an administrator. You can skip it if you never unplug the charger or a display while the lid is closed, and install it later in Settings > Unplug Protection."
     ),
     StepCopy(
       step: .selfTest, title: "Setup complete", symbol: "checkmark.seal",
@@ -67,7 +69,25 @@ struct OnboardingFlowTests {
     #expect(OnboardingFlow.progressLabel(step: .notifications, in: Self.seven) == "Step 3 of 7")
     #expect(OnboardingFlow.progressLabel(step: .welcome, in: Self.seven) == "Step 1 of 7")
     #expect(OnboardingFlow.progressLabel(step: .selfTest, in: Self.seven) == "Step 7 of 7")
-    #expect(OnboardingFlow.accessibilityLabel(step: .launchAtLogin, in: Self.seven) == "Step 2 of 7, Start at login")
+    #expect(OnboardingFlow.accessibilityLabel(step: .launchAtLogin, in: Self.seven) == "Step 2 of 7, Launch at login")
+  }
+
+  static let loginBodyWhenOn =
+    "Overtime needs to be running to keep the Mac awake. Launch at login is already on, so it starts every time you log in. You can turn it off here, or later in Settings > General."
+  static let loginBodyWhenOff =
+    "Overtime needs to be running to keep the Mac awake. Launching it at login means you never have to remember."
+
+  @Test func theLoginStepSaysLaunchAtLoginIsAlreadyOnWhenItIs() {
+    let enabled = OnboardingContext(loginItem: .enabled)
+    #expect(OnboardingFlow.body(step: .launchAtLogin, context: enabled) == Self.loginBodyWhenOn)
+    for status in [LoginItemStatus.notRegistered, .notFound, .requiresApproval] {
+      let context = OnboardingContext(loginItem: status)
+      #expect(OnboardingFlow.body(step: .launchAtLogin, context: context) == Self.loginBodyWhenOff, "\(status)")
+    }
+    #expect(OnboardingFlow.body(step: .launchAtLogin, context: OnboardingContext()) == Self.loginBodyWhenOff)
+    for step in OnboardingStep.allCases where step != .launchAtLogin {
+      #expect(OnboardingFlow.body(step: step, context: OnboardingContext()) == step.body, "\(step)")
+    }
   }
 
   @Test func theDotsMarkCompletedCurrentAndUpcomingSteps() {
@@ -116,7 +136,6 @@ struct OnboardingFlowTests {
     #expect(OnboardingFlow.finishLabel == "Finish Setup")
     #expect(OnboardingFlow.allowNotificationsLabel == "Allow Notifications")
     #expect(OnboardingFlow.allowLocationLabel == "Allow Location Access")
-    #expect(OnboardingFlow.installHelperLabel == "Install Unplug Protection…")
     #expect(
       OnboardingFlow.selfTestFailedCaption
         == "You can still finish setup. Overtime shows an error in the menu bar until the check passes.")
@@ -178,7 +197,7 @@ struct OnboardingFlowTests {
 
   @Test func theStepLabelsEqualTheLabelsOfTheSurfacesTheyComeFrom() {
     #expect(OnboardingFlow.allowLocationLabel == LocationRow.allowLabel)
-    #expect(OnboardingFlow.installHelperLabel == HelperStatusAction.install.label)
+    #expect(HelperStatusAction.install.label == "Install Unplug Protection…")
   }
 
   struct SkipCase: Sendable {
@@ -213,10 +232,10 @@ struct OnboardingFlowTests {
     SkipCase(name: "location unread", step: .location, context: OnboardingContext(), allowed: false),
     SkipCase(
       name: "helper not installed", step: .unplugProtection, context: OnboardingContext(helperInstalled: false),
-      allowed: true),
+      allowed: false),
     SkipCase(
-      name: "helper not installed, install pressed", step: .unplugProtection,
-      context: OnboardingContext(helperInstalled: false, installPressed: true), allowed: false),
+      name: "helper not installed, install in flight", step: .unplugProtection,
+      context: OnboardingContext(helperInstalled: false, inFlight: .install), allowed: false),
     SkipCase(
       name: "helper installed", step: .unplugProtection, context: OnboardingContext(helperInstalled: true),
       allowed: false),
@@ -273,17 +292,10 @@ struct OnboardingFlowTests {
     ButtonCase(name: "location unread", step: .location, context: OnboardingContext(), button: advance),
     ButtonCase(
       name: "helper not installed", step: .unplugProtection, context: OnboardingContext(helperInstalled: false),
-      button: OnboardingButton(title: "Install Unplug Protection…", action: .installHelper)),
-    ButtonCase(
-      name: "helper install pressed", step: .unplugProtection,
-      context: OnboardingContext(helperInstalled: false, installPressed: true), button: advance),
+      button: advance),
     ButtonCase(
       name: "helper install in flight", step: .unplugProtection,
-      context: OnboardingContext(helperInstalled: false, installPressed: true, inFlight: .install), button: advance),
-    ButtonCase(
-      name: "helper install not pressed, another action in flight", step: .unplugProtection,
-      context: OnboardingContext(helperInstalled: false, inFlight: .install),
-      button: OnboardingButton(title: "Install Unplug Protection…", action: .installHelper, enabled: false)),
+      context: OnboardingContext(helperInstalled: false, inFlight: .install), button: advance),
     ButtonCase(
       name: "helper installed", step: .unplugProtection, context: OnboardingContext(helperInstalled: true),
       button: advance),
@@ -335,7 +347,6 @@ struct OnboardingFlowTests {
     OnboardingContext(),
     OnboardingContext(selfTest: .passed),
     OnboardingContext(selfTest: .waiting),
-    OnboardingContext(helperInstalled: false, installPressed: true),
   ]
 
   @Test(arguments: settledContexts)

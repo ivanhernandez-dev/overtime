@@ -25,7 +25,7 @@ struct OnboardingWindow: View {
             .fontWeight(.semibold)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 16)
-          Text(step.body)
+          Text(model.stepBody)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 8)

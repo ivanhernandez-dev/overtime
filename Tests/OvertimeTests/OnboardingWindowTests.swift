@@ -310,6 +310,24 @@ struct OnboardingWindowTests {
     #expect(fixture.login.calls == ["register"])
   }
 
+  static let loginBodyWhenOn =
+    "Overtime needs to be running to keep the Mac awake. Launch at login is already on, so it starts every time you log in. You can turn it off here, or later in Settings > General."
+
+  @Test func theLoginStepBodyFollowsTheLoginItem() throws {
+    let fixture = try Fixture(login: .enabled)
+    fixture.model.begin()
+    fixture.model.performDefault()
+    #expect(fixture.model.currentStep == .launchAtLogin)
+    #expect(fixture.model.context.loginItem == .enabled)
+    #expect(fixture.model.stepBody == Self.loginBodyWhenOn)
+    fixture.panel.setLaunchAtLogin(false)
+    #expect(fixture.model.context.loginItem != .enabled)
+    #expect(fixture.model.stepBody == OnboardingStep.launchAtLogin.body)
+    fixture.panel.setLaunchAtLogin(true)
+    #expect(fixture.model.context.loginItem == .enabled)
+    #expect(fixture.model.stepBody == Self.loginBodyWhenOn)
+  }
+
   @Test func reachingEveryStepRequestsNothingRegistersNothingAndRunsNoStepAction() async throws {
     let fixture = try Fixture(notifications: .notDetermined, location: .notDetermined)
     let port = try #require(fixture.port)
@@ -362,21 +380,18 @@ struct OnboardingWindowTests {
     fixture.helperSource.set(HelperMonitorState(installer: .notRegistered))
     fixture.helper.apply(HelperMonitorState(installer: .notRegistered))
     #expect(fixture.model.context.helperInstalled == false)
-    #expect(
-      fixture.model.defaultButton == OnboardingButton(title: "Install Unplug Protection…", action: .installHelper))
-    #expect(fixture.model.showsSkip)
-    fixture.model.performDefault()
-    #expect(fixture.model.installPressed)
-    #expect(fixture.model.context.installPressed)
-    #expect(fixture.model.inFlight == .install)
-    #expect(fixture.model.defaultButton == OnboardingButton(title: "Continue", action: .advance))
+    #expect(fixture.model.defaultButton == Self.advance)
     #expect(!fixture.model.showsSkip)
-    #expect(!fixture.model.backEnabled)
+    #expect(fixture.model.helperRowActions == [.install])
+    let helper = fixture.helper
+    let install = Task { await helper.perform(.install) }
+    await install.value
+    #expect(fixture.helperSource.actions == ["install"])
+    #expect(fixture.model.defaultButton == Self.advance)
+    #expect(!fixture.model.showsSkip)
     #expect(fixture.model.currentStep == .unplugProtection)
-    #expect(await waitUntil { fixture.helperSource.actions == ["install"] && fixture.model.inFlight == nil })
-    #expect(fixture.model.backEnabled)
+    #expect(await waitUntil { fixture.model.backEnabled })
     fixture.model.begin()
-    #expect(!fixture.model.installPressed)
     #expect(fixture.model.results.isEmpty)
     #expect(fixture.model.context.location == .notDetermined)
     #expect(fixture.model.context.helperInstalled == false)
@@ -2112,7 +2127,6 @@ struct OnboardingWindowTests {
     }
   }
 
-  nonisolated static let install = OnboardingButton(title: "Install Unplug Protection…", action: .installHelper)
   nonisolated static let off = HelperMonitorState(installer: .notRegistered)
   nonisolated static let waitingForApproval = HelperMonitorState(installer: .requiresApproval)
   nonisolated static let stale = HelperStatus(helperVersion: 0)
@@ -2158,12 +2172,14 @@ struct OnboardingWindowTests {
     #expect(OnboardingUnplugProtectionStep.notes == UnplugProtectionPane.aboutNotes)
     #expect(
       OnboardingStep.unplugProtection.body
-        == "With the lid closed, macOS can still sleep when you unplug the charger or a display, even while Claude works. Unplug protection prevents this with a small helper that runs as an administrator."
+        == "With the lid closed, macOS can still sleep when you unplug the charger or a display, even while Claude works. Unplug protection prevents this with a small helper that runs as an administrator. You can skip it if you never unplug the charger or a display while the lid is closed, and install it later in Settings > Unplug Protection."
     )
-    #expect(OnboardingFlow.installHelperLabel == HelperStatusAction.install.label)
+    #expect(HelperStatusAction.install.label == "Install Unplug Protection…")
   }
 
-  @Test func reachingTheUnplugProtectionStepRegistersNothingAndOffersTheInstallOnceTheStatusIsRead() async throws {
+  @Test func reachingTheUnplugProtectionStepRegistersNothingAndTheRowOffersTheInstallOnceTheStatusIsRead()
+    async throws
+  {
     let fixture = try InstallFixture()
     let model = fixture.model
     model.setWindowVisible(true)
@@ -2178,17 +2194,16 @@ struct OnboardingWindowTests {
     #expect(fixture.pane.isPolling)
     #expect(await waitUntil { model.helperInstalled == false })
     #expect(fixture.pane.uiState == .off)
-    #expect(model.defaultButton == Self.install)
-    #expect(model.showsSkip)
-    #expect(model.helperRowActions.isEmpty)
+    #expect(model.defaultButton == Self.advance)
+    #expect(!model.showsSkip)
+    #expect(model.helperRowActions == [.install])
     #expect(await waitUntil { fixture.installer.statusReads >= 3 })
     #expect(fixture.installer.calls.isEmpty)
     #expect(fixture.connections.all.isEmpty)
-    #expect(!model.installPressed)
     #expect(model.inFlight == nil)
-    model.skipStep()
+    model.performDefault()
     #expect(model.currentStep == .selfTest)
-    #expect(model.results[.unplugProtection] == .skipped)
+    #expect(model.results[.unplugProtection] == .done)
     #expect(fixture.installer.calls.isEmpty)
   }
 
@@ -2203,24 +2218,29 @@ struct OnboardingWindowTests {
     try? await Task.sleep(for: .milliseconds(100))
     #expect(fixture.installer.calls.isEmpty)
     #expect(fixture.connections.all.isEmpty)
-    #expect(!model.installPressed)
     #expect(!fixture.pane.isPolling)
   }
 
-  @Test func installUnplugProtectionRegistersOnceAndTheDefaultButtonThenReadsContinue() async throws {
+  @Test func theRowsInstallRegistersOnceWhileContinueStaysTheDefault() async throws {
     let fixture = try InstallFixture()
     fixture.installer.failRegister(leaving: .requiresApproval)
+    fixture.installer.holdCalls()
+    defer { fixture.installer.releaseCalls() }
     #expect(await fixture.reachHelperStep())
     let model = fixture.model
-    #expect(model.defaultButton == Self.install)
-    model.performDefault()
-    #expect(model.installPressed)
-    #expect(model.inFlight == .install)
+    let pane = fixture.pane
+    #expect(model.defaultButton == Self.advance)
+    #expect(model.helperRowActions == [.install])
+    let install = Task { await pane.perform(.install) }
+    #expect(await waitUntil { pane.state.inFlight == .installing })
     #expect(model.defaultButton == Self.advance)
     #expect(!model.showsSkip)
     #expect(!model.backEnabled)
+    #expect(model.inFlight == nil)
     #expect(model.currentStep == .unplugProtection)
-    #expect(await waitUntil { model.inFlight == nil && fixture.pane.uiState == .waitingForApproval })
+    fixture.installer.releaseCalls()
+    await install.value
+    #expect(await waitUntil { pane.state.inFlight == nil && pane.uiState == .waitingForApproval })
     #expect(fixture.installer.calls == ["register", "openSystemSettings"])
     #expect(model.helperInstalled == true)
     #expect(model.defaultButton == Self.advance)
@@ -2237,64 +2257,48 @@ struct OnboardingWindowTests {
   }
 
   @Test(arguments: helperCases)
-  func onceInstallWasPressedTheDefaultButtonIsContinueInEveryHelperState(_ item: HelperCase) async throws {
-    let fixture = try Fixture(helper: Self.off)
-    fixture.helperSource.script(afterAction: item.state)
-    fixture.model.begin()
-    fixture.walk(to: .unplugProtection)
-    #expect(fixture.model.defaultButton == Self.install)
-    #expect(fixture.model.showsSkip)
-    fixture.model.performDefault()
-    #expect(await waitUntil { fixture.helperSource.actions == ["install"] && fixture.helper.state == item.state })
-    #expect(await waitUntil { fixture.model.inFlight == nil })
-    #expect(fixture.helper.uiState == item.shown)
-    #expect(fixture.model.installPressed)
-    #expect(fixture.model.defaultButton == Self.advance)
-    #expect(!fixture.model.showsSkip)
-    #expect(fixture.model.currentStep == .unplugProtection)
-    fixture.model.performDefault()
-    #expect(fixture.model.currentStep == .selfTest)
-    #expect(fixture.model.results[.unplugProtection] == .done)
-    #expect(fixture.helperSource.actions == ["install"])
-  }
-
-  @Test(arguments: helperCases)
-  func withoutAPressOnlyAHelperThatIsNotInstalledOffersTheInstall(_ item: HelperCase) throws {
+  func theDefaultButtonIsContinueInEveryHelperState(_ item: HelperCase) throws {
     let fixture = try Fixture(helper: item.state)
     fixture.model.begin()
     fixture.walk(to: .unplugProtection)
-    let notInstalled = item.state.installer.map { !$0.isInstalled } ?? false
+    #expect(fixture.helper.uiState == item.shown)
+    #expect(fixture.model.defaultButton == Self.advance)
+    #expect(!fixture.model.showsSkip)
+    #expect(fixture.helperSource.actions.isEmpty)
+  }
+
+  @Test(arguments: helperCases)
+  func onlyAHelperThatIsNotInstalledOffersTheInstallInItsRow(_ item: HelperCase) throws {
+    let fixture = try Fixture(helper: item.state)
+    fixture.model.begin()
+    fixture.walk(to: .unplugProtection)
     let installing = item.state.inFlight == .installing
-    let offered = OnboardingButton(
-      title: "Install Unplug Protection…", action: .installHelper, enabled: !installing)
     #expect(fixture.helper.uiState == item.shown)
     #expect(fixture.model.helperInstalled == item.state.installer.map(\.isInstalled))
-    #expect(fixture.model.defaultButton == (notInstalled ? offered : Self.advance))
-    #expect(fixture.model.showsSkip == notInstalled)
+    #expect(fixture.model.defaultButton == Self.advance)
+    #expect(!fixture.model.showsSkip)
     #expect(fixture.model.skipEnabled == !installing)
     #expect(fixture.model.backEnabled == !installing)
     #expect(fixture.model.context.inFlight == (installing ? .install : nil))
     #expect(fixture.model.inFlight == nil)
-    #expect(fixture.model.helperRowActions == item.shown.actions.filter { $0 != .install })
-    #expect(!fixture.model.installPressed)
+    #expect(fixture.model.helperRowActions == item.shown.actions)
     #expect(fixture.helperSource.actions.isEmpty)
   }
 
-  @Test func theRowOffersItsOwnInstallOnlyOnceTheFooterNoLongerDoes() async throws {
+  @Test func theRowOffersItsOwnInstallOnTheStep() async throws {
     let fixture = try Fixture(helper: Self.off)
     fixture.model.begin()
     fixture.walk(to: .checks)
     #expect(fixture.model.helperRowActions == [.install])
     fixture.model.continueStep()
-    #expect(fixture.model.defaultButton == Self.install)
-    #expect(fixture.model.helperRowActions.isEmpty)
-    fixture.model.performDefault()
-    #expect(await waitUntil { fixture.helperSource.actions == ["install"] && fixture.model.inFlight == nil })
-    #expect(fixture.helper.uiState == .off)
+    #expect(fixture.model.currentStep == .unplugProtection)
     #expect(fixture.model.defaultButton == Self.advance)
     #expect(fixture.model.helperRowActions == [.install])
     await fixture.helper.perform(.install)
-    #expect(fixture.helperSource.actions == ["install", "install"])
+    #expect(fixture.helperSource.actions == ["install"])
+    #expect(fixture.helper.uiState == .off)
+    #expect(fixture.model.defaultButton == Self.advance)
+    #expect(fixture.model.helperRowActions == [.install])
     #expect(fixture.model.currentStep == .unplugProtection)
   }
 
@@ -2314,7 +2318,7 @@ struct OnboardingWindowTests {
     #expect(fixture.model.currentStep == .unplugProtection)
   }
 
-  @Test func whileTheInstallIsInFlightBackAndSkipWaitAndContinueStaysOn() async throws {
+  @Test func whileTheRowsInstallIsInFlightBackWaitsAndContinueStaysOn() async throws {
     let held = HeldHelperSource(Self.off)
     let fixture = try Fixture()
     let pane = HelperPaneModel(panel: fixture.panel, source: held)
@@ -2323,12 +2327,13 @@ struct OnboardingWindowTests {
     let model = fixture.model
     model.begin()
     fixture.walk(to: .unplugProtection)
-    #expect(model.defaultButton == Self.install)
-    model.performDefault()
-    #expect(model.inFlight == .install)
+    #expect(model.defaultButton == Self.advance)
+    Task { await pane.perform(.install) }
     #expect(await waitUntil { held.installs == 1 })
+    pane.apply(HelperMonitorState(installer: .notRegistered, inFlight: .installing))
     try? await Task.sleep(for: .milliseconds(80))
-    #expect(model.inFlight == .install)
+    #expect(model.context.inFlight == .install)
+    #expect(model.inFlight == nil)
     #expect(model.defaultButton == Self.advance)
     #expect(!model.showsSkip)
     #expect(!model.backEnabled)
@@ -2342,7 +2347,7 @@ struct OnboardingWindowTests {
     model.back()
     #expect(model.currentStep == .selfTest)
     held.release(with: Self.waitingForApproval)
-    #expect(await waitUntil { model.inFlight == nil })
+    #expect(await waitUntil { model.context.inFlight == nil })
     #expect(held.installs == 1)
     #expect(model.backEnabled)
     model.back()
@@ -2362,13 +2367,12 @@ struct OnboardingWindowTests {
     let model = fixture.model
     model.begin()
     fixture.walk(to: .unplugProtection)
-    model.performDefault()
+    Task { await pane.perform(.install) }
     #expect(await waitUntil { held.installs == 1 })
-    #expect(model.inFlight == .install)
+    #expect(model.inFlight == nil)
     model.dismissed()
     model.begin()
     #expect(model.inFlight == nil)
-    #expect(!model.installPressed)
     fixture.walk(to: .notifications)
     #expect(await waitUntil { model.notificationAuthorization == .notDetermined })
     model.performDefault()
@@ -2389,14 +2393,14 @@ struct OnboardingWindowTests {
     defer { fixture.installer.releaseCalls() }
     #expect(await fixture.reachHelperStep())
     let model = fixture.model
-    model.performDefault()
+    let pane = fixture.pane
+    Task { await pane.perform(.install) }
     #expect(await waitUntil { fixture.pane.state.inFlight == .installing })
     model.dismissed()
     #expect(!fixture.pane.isPolling)
     model.begin()
     #expect(model.isActive)
     #expect(model.inFlight == nil)
-    #expect(!model.installPressed)
     #expect(model.context.inFlight == .install)
     #expect(model.context.actionInFlight)
     model.continueStep()
@@ -2413,17 +2417,18 @@ struct OnboardingWindowTests {
     #expect(fixture.connections.all.isEmpty)
   }
 
-  @Test func afterTheWindowIsClosedTheInstallButtonInstallsNothing() async throws {
+  @Test func afterTheWindowIsClosedTheStepInstallsNothing() async throws {
     let fixture = try Fixture(helper: Self.off)
     fixture.model.begin()
     fixture.walk(to: .unplugProtection)
-    #expect(fixture.model.defaultButton == Self.install)
+    #expect(fixture.model.defaultButton == Self.advance)
     fixture.model.dismissed()
     fixture.model.performDefault()
     try? await Task.sleep(for: .milliseconds(50))
     #expect(fixture.helperSource.actions.isEmpty)
-    #expect(!fixture.model.installPressed)
     #expect(fixture.model.inFlight == nil)
+    #expect(fixture.model.currentStep == .unplugProtection)
+    #expect(fixture.model.results[.unplugProtection] == nil)
   }
 
   @Test func theHelperStatusIsPolledOnlyWhileTheUnplugProtectionStepIsOnScreen() async throws {
@@ -2440,7 +2445,7 @@ struct OnboardingWindowTests {
     #expect(model.currentStep == .unplugProtection)
     #expect(fixture.helper.isPolling)
     #expect(await waitUntil { fixture.helperSource.refreshes >= 2 })
-    model.skipStep()
+    model.continueStep()
     #expect(model.currentStep == .selfTest)
     #expect(!fixture.helper.isPolling)
     #expect(await fixture.pollsStopped())
@@ -2502,7 +2507,7 @@ struct OnboardingWindowTests {
     #expect(fixture.helper.isPolling)
     fixture.walk(to: .unplugProtection)
     #expect(fixture.helper.isPolling)
-    model.skipStep()
+    model.continueStep()
     #expect(fixture.helper.isPolling)
     fixture.helper.setVisible(false, host: settingsPane)
     #expect(!fixture.helper.isPolling)
@@ -2549,7 +2554,7 @@ struct OnboardingWindowTests {
     #expect(model.stepChanges == 1)
     model.performDefault()
     #expect(model.stepChanges == 2)
-    #expect(model.progressAccessibilityLabel == "Step 2 of 7, Start at login")
+    #expect(model.progressAccessibilityLabel == "Step 2 of 7, Launch at login")
     model.back()
     #expect(model.stepChanges == 3)
     #expect(model.progressAccessibilityLabel == "Step 1 of 7, Welcome to Overtime")
@@ -2575,7 +2580,7 @@ struct OnboardingWindowTests {
   @Test func theProgressElementNamesEveryStep() throws {
     let fixture = try Fixture()
     let titles = [
-      "Welcome to Overtime", "Start at login", "Notifications", "Location (optional)", "Check your setup",
+      "Welcome to Overtime", "Launch at login", "Notifications", "Location (optional)", "Recommended macOS settings",
       "Unplug protection (optional)", "Setup complete",
     ]
     fixture.model.begin()

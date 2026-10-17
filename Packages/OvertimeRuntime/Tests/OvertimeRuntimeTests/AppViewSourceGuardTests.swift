@@ -1246,6 +1246,13 @@ struct AppViewSourceGuardTests {
     #expect(Self.welcomeIconFindings(in: window.text) == [])
   }
 
+  @Test func theStepBodyComesFromTheModel() throws {
+    let window = try #require(try Self.appSourceFiles().first { $0.name == Self.onboardingFile })
+    let text = window.text.filter { !$0.isWhitespace }
+    #expect(text.components(separatedBy: "Text(model.stepBody)").count - 1 == 1)
+    #expect(!text.contains("Text(step.body)"))
+  }
+
   @Test func theLastStepShowsWhereOvertimeLivesBelowItsTestRow() throws {
     let steps = try #require(try Self.appSourceFiles().first { $0.name == "OnboardingSteps.swift" })
     let text = steps.text.filter { !$0.isWhitespace }

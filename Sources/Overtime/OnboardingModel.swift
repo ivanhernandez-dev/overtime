@@ -19,7 +19,6 @@ final class OnboardingModel {
   @ObservationIgnored private var selfTestEngine: UUID?
   private(set) var notificationAuthorization: NotificationAuthorization?
   private(set) var locationStatus: LocationAuthorization?
-  private(set) var installPressed = false
   private(set) var stepChanges = 0
   var inFlight: OnboardingInFlight?
   var helper: HelperPaneModel?
@@ -59,7 +58,6 @@ final class OnboardingModel {
     results = [:]
     selfTestRequested = false
     selfTestEngine = nil
-    installPressed = false
     inFlight = nil
     isActive = true
     stepChanges += 1
@@ -73,8 +71,12 @@ final class OnboardingModel {
   var context: OnboardingContext {
     OnboardingContext(
       notifications: notificationAuthorization, location: locationStatus, loginItem: panel.loginItemStatus,
-      helperInstalled: helperInstalled, installPressed: installPressed, inFlight: shownInFlight,
+      helperInstalled: helperInstalled, inFlight: shownInFlight,
       selfTest: currentStep == .selfTest ? shownSelfTest : .notRun)
+  }
+
+  var stepBody: String {
+    OnboardingFlow.body(step: currentStep, context: context)
   }
 
   var progressLabel: String {
@@ -121,8 +123,6 @@ final class OnboardingModel {
       allowNotifications()
     case .allowLocation:
       allowLocation()
-    case .installHelper:
-      installHelper()
     }
   }
 
@@ -135,8 +135,7 @@ final class OnboardingModel {
   }
 
   var helperRowActions: [HelperStatusAction] {
-    let footerInstalls = defaultButton.action == .installHelper
-    return (helper?.uiState?.actions ?? []).filter { $0 != .install || !footerInstalls }
+    helper?.uiState?.actions ?? []
   }
 
   func setWindowVisible(_ visible: Bool) {
@@ -147,20 +146,6 @@ final class OnboardingModel {
   private func syncHelperVisibility() {
     let shown = isActive && windowVisible && currentStep == .unplugProtection
     helper?.setVisible(shown, host: ObjectIdentifier(self))
-  }
-
-  private func installHelper() {
-    let helper = helper
-    installPressed = true
-    inFlight = .install
-    Task { [weak self] in
-      await helper?.install()
-      self?.endInstall()
-    }
-  }
-
-  private func endInstall() {
-    if inFlight == .install { inFlight = nil }
   }
 
   func continueStep() {
