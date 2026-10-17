@@ -135,4 +135,13 @@ struct LabelCaseTests {
   @Test func theRestoreLabelIsSharedCopy() {
     #expect(ControlMapping.restoreLabel == "Restore Normal Sleep Now")
   }
+
+  @Test func theSwitchLabelsKeepSentenceCase() {
+    let labels = [LoginItemCaption.toggleLabel, ControlMapping.keepDisplayOnLabel]
+    #expect(labels == ["Launch at login", "Keep display on"])
+    for label in labels {
+      #expect(label.first?.isUppercase == true, "\(label)")
+      #expect(!Self.titleCaseFindings(label).isEmpty, "\(label)")
+    }
+  }
 }

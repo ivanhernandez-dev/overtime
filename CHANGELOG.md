@@ -2,6 +2,12 @@
 
 All notable changes to Overtime are listed here, in the Keep a Changelog format, and versions follow Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+
+- A Keep display on switch in the menu bar panel. It is the same setting as "Keep display on while Claude works" in Settings > General, and a change in either place shows in the other.
+
 ## [1.0.0] - 2026-10-15
 
 ### Added

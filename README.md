@@ -20,7 +20,7 @@
 </div>
 
 <p align="center">
-    <img src="docs/images/panel-holding-dark.png" width="400" alt="The Overtime panel while Claude Code is working: the status card with the indicator circle, the awake time and the lid, battery and network chips, two working sessions, and the Pause, Keep Awake and Sleep Now tiles">
+    <img src="docs/images/panel-holding-dark.png" width="400" alt="The Overtime panel while Claude Code is working: the status card with the indicator circle, the awake time and the lid, battery and network chips, two working sessions, the Pause, Keep Awake and Sleep Now tiles, and the Keep display on switch">
 </p>
 
 Claude Code keeps working when you step away, but your Mac doesn't know that: it idles to sleep, or sleeps the moment you close the lid, and the session stalls. Overtime is a menu bar app that notices when Claude Code is working and keeps the Mac awake while it works. When the work stops, or if Overtime itself fails, the Mac sleeps normally again.
@@ -105,6 +105,7 @@ Click the Overtime icon in the menu bar to open the panel. At the top, a status 
 | Pause | ⌃⌘P | Lets the Mac sleep normally for 15 Minutes, 1 Hour, Until Tomorrow or Until Resumed. While paused, it reads Resume. |
 | Keep Awake | ⌃⌘K | Keeps the Mac awake without Claude for 30 Minutes, 2 Hours or Until Stopped. It still lets go at the battery limit. While it holds, it reads Stop Keeping Awake. |
 | Release Until Idle | ⌃⌘I | Lets go of the current hold while Claude keeps working. Overtime holds again after Claude goes idle and starts working again. |
+| Keep display on | None | Keeps the display on while Claude works. It is the same setting as "Keep display on while Claude works" in Settings > General, and a change in either place shows in the other. |
 | Sleep Now | ⌃⌘S | Puts the Mac to sleep. While Claude works, it asks first: "Claude is working. Sleep anyway?" Choose Sleep Anyway or Keep Working. |
 | Restore Normal Sleep Now | ⌃⌘R | Clears every hold Overtime has set. It is the first step of the [emergency reset](#if-the-mac-wont-sleep). |
 | Settings… | ⌘, | Opens Settings. |
@@ -240,7 +241,7 @@ Overtime warns when it finds another tool that also manages sleep, with a messag
 <details>
 <summary>Does it keep the screen on?</summary>
 
-Not by default. Turn on "Keep display on while Claude works" in Settings > General. With the lid closed and no external display, the display still turns off so the screen locks. An external display is never turned off.
+Not by default. Turn on Keep display on in the menu bar panel, or "Keep display on while Claude works" in Settings > General; both are the same setting. With the lid closed and no external display, the display still turns off so the screen locks. An external display is never turned off.
 
 </details>
 

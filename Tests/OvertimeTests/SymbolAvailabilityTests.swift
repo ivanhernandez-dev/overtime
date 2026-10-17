@@ -13,8 +13,8 @@ struct SymbolAvailabilityTests {
   static let rowSymbols = [
     "battery.0percent", "battery.25percent", "battery.50percent", "battery.75percent", "battery.100percent",
     "battery.100percent.bolt", "checkmark", "wifi", "terminal", "info.circle", "play.circle", "cup.and.saucer",
-    "stop.circle", "arrow.uturn.backward.circle", "arrow.counterclockwise.circle", "circle", "checkmark.circle.fill",
-    "minus.circle.fill", "xmark.circle.fill", "chevron.down",
+    "stop.circle", "arrow.uturn.backward.circle", "arrow.counterclockwise.circle", "display", "circle",
+    "checkmark.circle.fill", "minus.circle.fill", "xmark.circle.fill", "chevron.down",
   ]
 
   static let bodyPointSize: CGFloat = 13
@@ -47,7 +47,12 @@ struct SymbolAvailabilityTests {
   }
 
   @Test func theListCoversEverySymbolInTheUISpec() {
-    #expect(Set(Self.stateSymbols + Self.rowSymbols).count == 30)
+    #expect(Set(Self.stateSymbols + Self.rowSymbols).count == 31)
+  }
+
+  @Test func theDisplaySwitchSymbolIsListed() {
+    #expect(Self.rowSymbols.contains(ControlMapping.keepDisplayOnSymbol))
+    #expect(Set(Self.stateSymbols + Self.rowSymbols).count == 31)
   }
 
   @Test func theMenuTileChevronIsListed() {
