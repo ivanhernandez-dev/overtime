@@ -53,6 +53,7 @@ final class PanelModel {
   @ObservationIgnored var logLoginItemError: (String) -> Void = { _ in }
   @ObservationIgnored var onOpenSettings: (SettingsPane?) -> Void = { _ in }
   @ObservationIgnored var onReviewUpdate: () -> Void = {}
+  @ObservationIgnored var onSetKeepDisplayOn: (@MainActor (Bool) async -> SettingsCommitResult?)?
   @ObservationIgnored var notifications: (any NotificationPort)?
   @ObservationIgnored var location: (any LocationStatusPort)?
   @ObservationIgnored var makeLocation: (() -> (any LocationStatusPort)?)?
@@ -347,6 +348,10 @@ final class PanelModel {
     ControlAvailability.from(presentation, snapshot: snapshot)
   }
 
+  var keepDisplayOn: Bool {
+    snapshot?.keepDisplayOn ?? false
+  }
+
   @discardableResult
   func perform(_ action: ControlAction) async -> CtlResponse? {
     guard controls.engineControlsEnabled else { return nil }
@@ -365,6 +370,21 @@ final class PanelModel {
 
   func trigger(_ action: ControlAction) {
     Task { await perform(action) }
+  }
+
+  @discardableResult
+  func setKeepDisplayOn(_ enabled: Bool) async -> SettingsCommitResult? {
+    guard controls.engineControlsEnabled, enabled != keepDisplayOn else { return nil }
+    guard host != nil, let onSetKeepDisplayOn else {
+      showControlFailure(ControlFeedback.keepDisplayOnFailure)
+      return nil
+    }
+    let result = await onSetKeepDisplayOn(enabled)
+    if ControlFeedback.settingFailed(result) {
+      showControlFailure(ControlFeedback.keepDisplayOnFailure)
+    }
+    await probe()
+    return result
   }
 
   @discardableResult

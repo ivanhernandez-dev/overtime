@@ -105,6 +105,7 @@ public struct EngineSnapshot: Sendable, Equatable {
   public var graceDeadline: Instant?
   public var batteryLowPercent: Int
   public var batteryResumePercent: Int
+  public var keepDisplayOn: Bool
   public var power: PowerReading?
   public var externalDisplays: Int?
   public var coexistenceWarned: Bool
@@ -141,6 +142,7 @@ public struct EngineSnapshot: Sendable, Equatable {
     graceDeadline: Instant? = nil,
     batteryLowPercent: Int = Settings().batteryLowPercent,
     batteryResumePercent: Int = Settings().batteryResumePercent,
+    keepDisplayOn: Bool = Settings().keepDisplayOn,
     power: PowerReading? = nil,
     externalDisplays: Int? = nil,
     coexistenceWarned: Bool = false,
@@ -180,6 +182,7 @@ public struct EngineSnapshot: Sendable, Equatable {
     self.graceDeadline = graceDeadline
     self.batteryLowPercent = batteryLowPercent
     self.batteryResumePercent = batteryResumePercent
+    self.keepDisplayOn = keepDisplayOn
     self.power = power
     self.externalDisplays = externalDisplays
     self.coexistenceWarned = coexistenceWarned
@@ -210,6 +213,7 @@ public struct EngineSnapshot: Sendable, Equatable {
       graceDeadline: Self.graceDeadline(state: state, settings: settings),
       batteryLowPercent: settings.batteryLowPercent,
       batteryResumePercent: settings.batteryResumePercent,
+      keepDisplayOn: settings.keepDisplayOn,
       power: power,
       externalDisplays: state.lid.closed == true ? state.lid.externalDisplays : state.lastExternalDisplays,
       coexistenceWarned: warned,

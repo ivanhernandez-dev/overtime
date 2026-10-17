@@ -51,6 +51,10 @@ public enum ControlMapping {
   public static let releaseUnavailableHelp = "Available while Claude is keeping the Mac awake."
   public static let engineUnavailableHelp = "Unavailable while Overtime isn't running normally."
   public static let uninstallingHelp = "Not available while Overtime uninstalls."
+  public static let keepDisplayOnLabel = "Keep display on"
+  public static let keepDisplayOnSymbol = "display"
+  public static let keepDisplayOnHelp =
+    "Keeps the display on while Claude works. With the lid closed and no external display, the display still turns off so the screen locks."
 
   public static func request(for action: ControlAction, now: Date, calendar: Calendar) -> CtlRequest {
     switch action {
@@ -80,6 +84,7 @@ public enum ControlMapping {
 public enum ControlFeedback {
   public static let noticeSeconds: Double = 10
   public static let sleepNowFailure = "Couldn't put the Mac to sleep. Try again."
+  public static let keepDisplayOnFailure = "Couldn't change the display setting. Try again."
 
   public static func failureCopy(for action: ControlAction) -> String {
     switch action {
@@ -94,6 +99,13 @@ public enum ControlFeedback {
   public static func failed(_ response: CtlResponse?) -> Bool {
     guard let response else { return true }
     return !response.ok
+  }
+
+  public static func settingFailed(_ result: SettingsCommitResult?) -> Bool {
+    switch result {
+    case nil, .applied: false
+    case .applyTimedOut, .saveFailed, .invalid: true
+    }
   }
 }
 
@@ -132,6 +144,10 @@ public struct ControlAvailability: Sendable, Equatable {
   public var releaseHelp: String? {
     if releaseEnabled { return nil }
     return engineControlsEnabled ? ControlMapping.releaseUnavailableHelp : unavailableHelp
+  }
+
+  public var displaySwitchHelp: String {
+    engineControlsEnabled ? ControlMapping.keepDisplayOnHelp : unavailableHelp
   }
 
   private var unavailableHelp: String {

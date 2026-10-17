@@ -30,6 +30,7 @@ struct ControlsSection: View {
         .disabled(!availability.releaseEnabled)
         .help(ifPresent: availability.releaseHelp)
         .accessibilityHint(ifPresent: availability.releaseHelp)
+        KeepDisplayOnRow(model: model)
         Divider()
           .padding(.vertical, 8)
         Button(role: .destructive) {
@@ -143,6 +144,47 @@ struct SleepConfirmationRow: View {
     }
     .padding(.horizontal, 4)
     .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
+  }
+}
+
+struct KeepDisplayOnRow: View {
+  let isOn: Bool
+  let isEnabled: Bool
+  let help: String
+  let setKeepDisplayOn: (Bool) -> Void
+
+  var body: some View {
+    HStack(spacing: 0) {
+      HStack(spacing: StatusRowLayout.iconGap) {
+        Image(systemName: ControlMapping.keepDisplayOnSymbol)
+          .frame(width: StatusRowLayout.iconWidth)
+          .accessibilityHidden(true)
+        Text(ControlMapping.keepDisplayOnLabel)
+          .font(.body)
+          .accessibilityHidden(true)
+      }
+      .opacity(isEnabled ? 1 : 0.5)
+      Spacer(minLength: 8)
+      Toggle(ControlMapping.keepDisplayOnLabel, isOn: Binding(get: { isOn }, set: { setKeepDisplayOn($0) }))
+        .toggleStyle(.switch)
+        .controlSize(.mini)
+        .labelsHidden()
+        .accessibilityHint(Text(help))
+    }
+    .padding(.horizontal, 4)
+    .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
+    .contentShape(Rectangle())
+    .disabled(!isEnabled)
+    .help(help)
+  }
+}
+
+extension KeepDisplayOnRow {
+  init(model: PanelModel) {
+    let availability = model.controls
+    self.init(
+      isOn: model.keepDisplayOn, isEnabled: availability.engineControlsEnabled, help: availability.displaySwitchHelp,
+      setKeepDisplayOn: { enabled in Task { await model.setKeepDisplayOn(enabled) } })
   }
 }
 

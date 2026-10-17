@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private var menuBarPanel: MenuBarPanelController?
   private var reopenWindow: AuxiliaryWindowController?
   private var settingsPresenter: SettingsPresenter?
+  private var sharedSettingsModel: SettingsModel?
   private var onboardingPresenter: OnboardingPresenter?
   private var notificationAdapter: UserNotificationsAdapter?
   private var notificationCoordinator: NotificationCoordinator?
@@ -288,51 +289,65 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   var settingsModel: SettingsModel? {
-    settingsPresenter?.model
+    sharedSettingsModel
   }
 
   private func attachSettings() {
     model.onOpenSettings = { [weak self] pane in
       self?.showSettings(pane: pane)
     }
+    model.onSetKeepDisplayOn = { [weak self] enabled in await self?.commitKeepDisplayOn(enabled) }
   }
 
   func showSettings(pane: SettingsPane? = nil) {
     guard !AppMode.current.isTestHost else { return }
     if settingsPresenter == nil {
-      let host = appHost
-      let paths =
-        host?.paths
-        ?? AppPaths.primary(
-          environment: ProcessInfo.processInfo.environment, homeDirectory: NSHomeDirectory())
-      let location = sharedLocationReader()
-      let settingsModel = SettingsModel(
-        settingsFile: paths.settingsFile, folderPicker: AppKitFolderPicker(), wifi: CoreWLANInfo(),
-        location: location, panel: model, preferencesFile: paths.preferencesFile, notifications: notificationAdapter,
-        helper: helperPane)
-      settingsModel.logError = { decision in Self.logSettingsError(decision, host: host) }
-      settingsModel.openURL = { url in NSWorkspace.shared.open(url) }
-      settingsModel.about = Self.aboutModel(updater: updaterPort)
-      settingsModel.about.uninstall = makeUninstallModel()
-      settingsModel.onPreferencesChanged = { [weak self] in
-        self?.notificationCoordinator?.preferencesChanged()
-      }
-      settingsModel.onRunOnboarding = { [weak self] in
-        self?.showOnboarding()
-      }
-      settingsModel.diagnostics.savePanel = AppKitSavePanel()
-      settingsModel.diagnostics.logsDirectory = paths.logsDirectory
-      settingsModel.diagnostics.reveal = { urls in NSWorkspace.shared.activateFileViewerSelecting(urls) }
-      settingsModel.diagnostics.makeExporter = { inputs in
-        DiagnosticsExporter(
-          paths: paths, tools: ToolRunner(), inputs: inputs, clock: SystemClock(),
-          helperLogDirectory: SMAppServiceDaemon.identity.logDirectory,
-          log: { decision in Self.logSettingsError(decision, host: host) })
-      }
-      settingsPresenter = SettingsPresenter(model: settingsModel)
+      settingsPresenter = SettingsPresenter(model: makeSettingsModel())
     }
     syncSettingsHost()
     settingsPresenter?.show(pane: pane)
+  }
+
+  private func makeSettingsModel() -> SettingsModel {
+    if let sharedSettingsModel { return sharedSettingsModel }
+    let host = appHost
+    let paths =
+      host?.paths
+      ?? AppPaths.primary(
+        environment: ProcessInfo.processInfo.environment, homeDirectory: NSHomeDirectory())
+    let location = sharedLocationReader()
+    let settingsModel = SettingsModel(
+      settingsFile: paths.settingsFile, folderPicker: AppKitFolderPicker(), wifi: CoreWLANInfo(),
+      location: location, panel: model, preferencesFile: paths.preferencesFile, notifications: notificationAdapter,
+      helper: helperPane)
+    settingsModel.logError = { decision in Self.logSettingsError(decision, host: host) }
+    settingsModel.openURL = { url in NSWorkspace.shared.open(url) }
+    settingsModel.about = Self.aboutModel(updater: updaterPort)
+    settingsModel.about.uninstall = makeUninstallModel()
+    settingsModel.onPreferencesChanged = { [weak self] in
+      self?.notificationCoordinator?.preferencesChanged()
+    }
+    settingsModel.onRunOnboarding = { [weak self] in
+      self?.showOnboarding()
+    }
+    settingsModel.diagnostics.savePanel = AppKitSavePanel()
+    settingsModel.diagnostics.logsDirectory = paths.logsDirectory
+    settingsModel.diagnostics.reveal = { urls in NSWorkspace.shared.activateFileViewerSelecting(urls) }
+    settingsModel.diagnostics.makeExporter = { inputs in
+      DiagnosticsExporter(
+        paths: paths, tools: ToolRunner(), inputs: inputs, clock: SystemClock(),
+        helperLogDirectory: SMAppServiceDaemon.identity.logDirectory,
+        log: { decision in Self.logSettingsError(decision, host: host) })
+    }
+    sharedSettingsModel = settingsModel
+    return settingsModel
+  }
+
+  private func commitKeepDisplayOn(_ enabled: Bool) async -> SettingsCommitResult? {
+    guard !AppMode.current.isTestHost else { return nil }
+    let settings = makeSettingsModel()
+    syncSettingsHost()
+    return await settings.setKeepDisplayOn(enabled)
   }
 
   nonisolated private static let uninstallLogger = Logger(subsystem: FileLogger.logSubsystem, category: "uninstall")
