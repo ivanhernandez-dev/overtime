@@ -362,6 +362,7 @@ struct HelperMachineTests {
     case thermalUnreadableWatch
     case lidOpen
     case lidUnreadable
+    case temperatureWatch
 
     var reason: String {
       switch self {
@@ -378,6 +379,7 @@ struct HelperMachineTests {
       case .thermalUnreadable, .thermalUnreadableWatch: return "thermalUnreadable"
       case .lidOpen: return "lidOpen"
       case .lidUnreadable: return "lidUnreadable"
+      case .temperatureWatch: return "temperature"
       }
     }
 
@@ -457,6 +459,9 @@ struct HelperMachineTests {
     case .lidUnreadable:
       fake.setLid(nil)
       machine.watch()
+    case .temperatureWatch:
+      fake.setBatteryTemperature(60)
+      machine.watch()
     }
   }
 
@@ -520,11 +525,70 @@ struct HelperMachineTests {
     #expect(fake.calls.isEmpty)
   }
 
-  @Test func watchingAHealthyHoldReadsTheLidPowerAndThermalAndNothingElse() {
+  @Test func watchingAHealthyHoldReadsTheLidPowerThermalAndBatteryTemperatureAndNothingElse() {
     let (machine, fake) = owned()
     machine.watch()
-    #expect(fake.calls == [.lidClosed, .power, .thermal])
+    #expect(fake.calls == [.lidClosed, .power, .thermal, .batteryTemperature])
     #expect(machine.needsWatch)
+  }
+
+  @Test(arguments: [true, false])
+  func aBatteryAtTheCeilingReleasesWhateverThePowerSource(onBattery: Bool) {
+    let (machine, fake) = owned(
+      floor: HelperSafetyLimits.notGiven, ceiling: 45, power: Self.charge(80, onBattery: onBattery))
+    fake.setBatteryTemperature(44)
+    machine.watch()
+    #expect(fake.pmsetWrites.isEmpty)
+    #expect(machine.needsWatch)
+    fake.setBatteryTemperature(45)
+    machine.watch()
+    #expect(
+      fake.holdCalls == [
+        .writeSleepDisabled(false), .readSleepDisabled, .clamshellEdge, .recordWrite(owns: false, prior: false),
+      ])
+    #expect(fake.logLines.last == "release reason=temperature sleepDisabled=0 edge=done")
+    #expect(!machine.needsWatch)
+  }
+
+  @Test func withoutACeilingTheHelperReleasesAt60Degrees() {
+    let (machine, fake) = owned()
+    fake.setBatteryTemperature(59)
+    machine.watch()
+    #expect(fake.pmsetWrites.isEmpty)
+    fake.setBatteryTemperature(60)
+    machine.watch()
+    #expect(fake.pmsetWrites == [false])
+    #expect(fake.logLines.last == "release reason=temperature sleepDisabled=0 edge=done")
+  }
+
+  @Test func aSetAtOrAboveTheCeilingIsRefused() {
+    let (machine, fake) = make()
+    fake.setBatteryTemperature(45)
+    #expect(
+      machine.set(floor: HelperSafetyLimits.notGiven, ceiling: 45)
+        == HelperReply(code: .refused, message: "temperature"))
+    #expect(fake.holdCalls.isEmpty)
+    #expect(fake.stored == .missing)
+    #expect(fake.logLines == ["set refused reason=temperature"])
+    fake.setBatteryTemperature(44)
+    #expect(machine.set(floor: HelperSafetyLimits.notGiven, ceiling: 45).code == .owned)
+  }
+
+  @Test func aMissingBatteryTemperatureNeverReleasesAndNeverRefuses() {
+    let (machine, fake) = make()
+    fake.setBatteryTemperature(nil)
+    #expect(machine.set().code == .owned)
+    machine.watch()
+    #expect(fake.pmsetWrites == [true])
+    #expect(machine.needsWatch)
+  }
+
+  @Test func statusReportsTheBatteryTemperature() {
+    let (machine, fake) = make()
+    fake.setBatteryTemperature(33)
+    #expect(machine.status(appVersion: 1).status.batteryTemperature == 33)
+    fake.setBatteryTemperature(nil)
+    #expect(machine.status(appVersion: 1).status.batteryTemperature == nil)
   }
 
   @Test func theHelperNeedsWatchingOnlyWhileItHolds() {
@@ -784,6 +848,7 @@ struct HelperMachineTests {
     case thermalSleeping
     case thermalCritical
     case thermalUnreadable
+    case temperature
 
     var reason: String {
       switch self {
@@ -794,6 +859,7 @@ struct HelperMachineTests {
       case .powerUnreadable: return "powerUnreadable"
       case .thermalTrapping, .thermalSleeping, .thermalCritical: return "thermal"
       case .thermalUnreadable: return "thermalUnreadable"
+      case .temperature: return "temperature"
       }
     }
   }
@@ -811,6 +877,7 @@ struct HelperMachineTests {
     case .thermalSleeping: fake.setThermal(Self.pressure(4))
     case .thermalCritical: fake.setThermal(Self.pressure(0, critical: true))
     case .thermalUnreadable: fake.setThermal(nil)
+    case .temperature: fake.setBatteryTemperature(60)
     }
   }
 
@@ -839,8 +906,9 @@ struct HelperMachineTests {
     let (machine, fake) = make()
     fake.setPower(Self.battery(11))
     fake.setThermal(Self.pressure(2))
+    fake.setBatteryTemperature(59)
     #expect(machine.set().code == .owned)
-    #expect(fake.actions.prefix(4) == [.lidClosed, .power, .thermal, .readSleepDisabled])
+    #expect(fake.actions.prefix(5) == [.lidClosed, .power, .thermal, .batteryTemperature, .readSleepDisabled])
   }
 
   @Test func aFailedPmsetClearIsRetriedFiveSecondsLater() {
@@ -1258,9 +1326,9 @@ struct HelperMachineTests {
         == HelperStatus(
           helperVersion: 1, sleepDisabled: true, owns: true, prior: false, engaged: true, batteryPercent: 80,
           onBattery: false, warningLevel: 1, thermalLevel: 0, thermalCritical: false, lastReleaseReason: nil,
-          exiting: false, batteryFloorPercent: 10, temperatureCeilingCelsius: 60))
+          exiting: false, batteryFloorPercent: 10, temperatureCeilingCelsius: 60, batteryTemperature: 30))
     #expect(!answer.exitAfterReply)
-    #expect(fake.calls == [.readSleepDisabled, .power, .thermal])
+    #expect(fake.calls == [.readSleepDisabled, .power, .thermal, .batteryTemperature])
   }
 
   @Test func statusAfterAReleaseNamesTheReason() {
@@ -1286,6 +1354,7 @@ struct HelperMachineTests {
     let (machine, fake) = make(sleepDisabled: nil)
     fake.setPower(nil)
     fake.setThermal(nil)
+    fake.setBatteryTemperature(nil)
     #expect(
       machine.status(appVersion: 1).status
         == HelperStatus(helperVersion: 1, batteryFloorPercent: 10, temperatureCeilingCelsius: 60))

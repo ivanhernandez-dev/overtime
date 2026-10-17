@@ -5,6 +5,7 @@ public protocol HelperSystemPort {
   func clamshellEdge() -> Bool
   func power() -> HelperPowerFacts?
   func thermal() -> HelperThermalFacts?
+  func batteryTemperature() -> Int?
   func pause(milliseconds: Int)
 }
 

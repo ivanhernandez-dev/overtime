@@ -9,6 +9,7 @@ final class FakeHelperSystem: HelperSystemPort, HelperRecordPort, HelperLogPort,
     case clamshellEdge
     case power
     case thermal
+    case batteryTemperature
     case pause(Int)
     case recordRead
     case recordWrite(owns: Bool, prior: Bool)
@@ -18,7 +19,7 @@ final class FakeHelperSystem: HelperSystemPort, HelperRecordPort, HelperLogPort,
       switch self {
       case .readSleepDisabled, .writeSleepDisabled, .clamshellEdge, .recordWrite:
         return true
-      case .lidClosed, .power, .thermal, .pause, .recordRead, .log:
+      case .lidClosed, .power, .thermal, .batteryTemperature, .pause, .recordRead, .log:
         return false
       }
     }
@@ -27,6 +28,7 @@ final class FakeHelperSystem: HelperSystemPort, HelperRecordPort, HelperLogPort,
   static let startSeconds: Double = 1_000
   static let onPower = HelperPowerFacts(onBattery: false, percent: 80, warningLevel: HelperPowerFacts.warningNone)
   static let nominal = HelperThermalFacts(pressureLevel: 0, critical: false)
+  static let coolBattery = 30
 
   private struct State {
     var calls: [Call] = []
@@ -40,6 +42,7 @@ final class FakeHelperSystem: HelperSystemPort, HelperRecordPort, HelperLogPort,
     var edgeSucceeds = true
     var power: HelperPowerFacts? = FakeHelperSystem.onPower
     var thermal: HelperThermalFacts? = FakeHelperSystem.nominal
+    var batteryTemperature: Int? = FakeHelperSystem.coolBattery
     var now = FakeHelperSystem.startSeconds
     var stored: HelperRecordRead
     var recordWriteSucceeds = true
@@ -130,6 +133,10 @@ final class FakeHelperSystem: HelperSystemPort, HelperRecordPort, HelperLogPort,
     state.withLock { $0.thermal = facts }
   }
 
+  func setBatteryTemperature(_ celsius: Int?) {
+    state.withLock { $0.batteryTemperature = celsius }
+  }
+
   func setStored(_ read: HelperRecordRead) {
     state.withLock { $0.stored = read }
   }
@@ -194,6 +201,13 @@ final class FakeHelperSystem: HelperSystemPort, HelperRecordPort, HelperLogPort,
     state.withLock {
       $0.calls.append(.thermal)
       return $0.thermal
+    }
+  }
+
+  func batteryTemperature() -> Int? {
+    state.withLock {
+      $0.calls.append(.batteryTemperature)
+      return $0.batteryTemperature
     }
   }
 

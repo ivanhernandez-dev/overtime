@@ -91,6 +91,10 @@ final class OrderedHelperSystem: HelperSystemPort, Sendable {
     fake.thermal()
   }
 
+  func batteryTemperature() -> Int? {
+    30
+  }
+
   func pause(milliseconds: Int) {
     fake.pause(milliseconds: milliseconds)
   }

@@ -122,12 +122,13 @@ public final class HelperMachine {
     let sleepDisabled = system.readSleepDisabled()
     let power = system.power()
     let thermal = system.thermal()
+    let batteryTemperature = system.batteryTemperature()
     let status = HelperStatus(
       helperVersion: version, sleepDisabled: sleepDisabled, owns: owns, prior: record?.prior, engaged: engaged,
       batteryPercent: power?.percent, onBattery: power?.onBattery, warningLevel: power?.warningLevel,
       thermalLevel: thermal?.pressureLevel, thermalCritical: thermal?.critical,
       lastReleaseReason: lastReleaseReason, exiting: shouldExit, batteryFloorPercent: limits.batteryFloorPercent,
-      temperatureCeilingCelsius: limits.temperatureCeilingCelsius)
+      temperatureCeilingCelsius: limits.temperatureCeilingCelsius, batteryTemperature: batteryTemperature)
     return (status, shouldExit)
   }
 
@@ -208,7 +209,9 @@ public final class HelperMachine {
     guard let closed = system.lidClosed() else { return "lidUnreadable" }
     guard closed else { return "lidOpen" }
     if let reason = Self.powerReason(system.power(), floor: limits.batteryFloorPercent) { return reason }
-    return Self.thermalReason(system.thermal())
+    if let reason = Self.thermalReason(system.thermal()) { return reason }
+    if let celsius = system.batteryTemperature(), celsius >= limits.temperatureCeilingCelsius { return "temperature" }
+    return nil
   }
 
   private func noteStale() {

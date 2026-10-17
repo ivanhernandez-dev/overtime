@@ -1,5 +1,6 @@
 import Foundation
 import OvertimeCore
+import OvertimeHelperCore
 import OvertimeSystem
 import Testing
 
@@ -46,6 +47,17 @@ struct BatteryTemperatureReaderTests {
     }
     let packs: [Any?] = [["Temperature": 3100] as [String: Any], ["Temperature": "x"] as [String: Any]]
     #expect(BatteryTemperatureReader.classify(batteryFound: true, topLevel: nil, packData: packs) == .unreadable)
+  }
+
+  @Test func theHelperAndTheAppConvertATemperatureTheSameWay() {
+    let edges = [-4001, -4000, -101, -100, -1, 0, 4499, 4500, 10000, 10001]
+    let values = Array(stride(from: -4500, through: 10500, by: 7)) + edges
+    let mismatches = values.filter { centidegrees in
+      HelperBatteryTemperature.celsius(centidegrees: centidegrees)
+        != BatteryTemperatureReader.celsius(centidegrees: centidegrees)
+    }
+    #expect(values.count > 2000)
+    #expect(mismatches.isEmpty, "first mismatches: \(mismatches.prefix(5))")
   }
 
   @Test func aLiveReadOnThisMacIsACelsiusInRangeOrUnavailable() {

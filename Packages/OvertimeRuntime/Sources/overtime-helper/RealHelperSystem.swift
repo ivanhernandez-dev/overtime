@@ -9,6 +9,10 @@ struct RealHelperSystem: HelperSystemPort {
   static let rootDomainClass = "IOPMrootDomain"
   static let sleepDisabledKey = "SleepDisabled"
   static let lidStateKey = "AppleClamshellState"
+  static let batteryClass = "AppleSmartBattery"
+  static let packClass = "AppleSmartBatteryPack"
+  static let temperatureKey = "Temperature"
+  static let batteryDataKey = "BatteryData"
   static let nullDevice = "/dev/null"
   static let pmsetPollMicroseconds: useconds_t = 50_000
   static let pmsetPollCount = 100
@@ -89,6 +93,44 @@ struct RealHelperSystem: HelperSystemPort {
     }
     return HelperThermalFacts(
       pressureLevel: Int(clamping: level), critical: ProcessInfo.processInfo.thermalState == .critical)
+  }
+
+  func batteryTemperature() -> Int? {
+    var candidates: [Any] = []
+    if let matching = IOServiceMatching(Self.batteryClass) {
+      let battery = IOServiceGetMatchingService(kIOMainPortDefault, matching)
+      if battery != IO_OBJECT_NULL {
+        if let value = IORegistryEntryCreateCFProperty(
+          battery, Self.temperatureKey as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue()
+        {
+          candidates.append(value)
+        }
+        IOObjectRelease(battery)
+      }
+    }
+    if candidates.isEmpty, let matching = IOServiceMatching(Self.packClass) {
+      var iterator: io_iterator_t = IO_OBJECT_NULL
+      if IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) == KERN_SUCCESS {
+        while case let pack = IOIteratorNext(iterator), pack != IO_OBJECT_NULL {
+          let data = IORegistryEntryCreateCFProperty(
+            pack, Self.batteryDataKey as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue()
+          if let value = (data as? [String: Any])?[Self.temperatureKey] {
+            candidates.append(value)
+          }
+          IOObjectRelease(pack)
+        }
+        IOObjectRelease(iterator)
+      }
+    }
+    guard !candidates.isEmpty else { return nil }
+    var hottest: Int?
+    for candidate in candidates {
+      guard let centidegrees = candidate as? Int,
+        let celsius = HelperBatteryTemperature.celsius(centidegrees: centidegrees)
+      else { return nil }
+      hottest = max(hottest ?? celsius, celsius)
+    }
+    return hottest
   }
 
   func pause(milliseconds: Int) {
