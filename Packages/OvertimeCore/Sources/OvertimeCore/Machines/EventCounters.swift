@@ -13,6 +13,7 @@ public struct EventCounters: Sendable, Equatable {
   public var sleepRequest: EffectID?
   public var hotspotSwitches: UInt64
   public var wifiCycles: UInt64
+  public var temperatureReleases: UInt64
 
   public init(
     holdErrorEpisodes: UInt64 = 0,
@@ -26,7 +27,8 @@ public struct EventCounters: Sendable, Equatable {
     sleepRequested: Bool = false,
     sleepRequest: EffectID? = nil,
     hotspotSwitches: UInt64 = 0,
-    wifiCycles: UInt64 = 0
+    wifiCycles: UInt64 = 0,
+    temperatureReleases: UInt64 = 0
   ) {
     self.holdErrorEpisodes = holdErrorEpisodes
     self.holdErrorsWhileBusy = holdErrorsWhileBusy
@@ -40,6 +42,7 @@ public struct EventCounters: Sendable, Equatable {
     self.sleepRequest = sleepRequest
     self.hotspotSwitches = hotspotSwitches
     self.wifiCycles = wifiCycles
+    self.temperatureReleases = temperatureReleases
   }
 
   public static func observe(_ state: inout AppState, before: AppState, event: Event, effects: [Effect], now: Instant) {
@@ -52,6 +55,9 @@ public struct EventCounters: Sendable, Equatable {
     }
     if before.want.wanted == true, state.want.wanted == false, state.want.reason == "battery" {
       bump(&counters.batteryReleases)
+    }
+    if before.want.wanted == true, state.want.wanted == false, state.want.reason == "temperature" {
+      bump(&counters.temperatureReleases)
     }
     if before.busy.busy == true, state.busy.busy != true {
       counters.busyEndedAt = state.want.lastBusy ?? now

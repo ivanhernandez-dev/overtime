@@ -11,7 +11,9 @@ public struct BatteryState: Sendable, Equatable {
 public enum Battery {
   public static let unknownPercentMessage = "Battery level unknown: releasing the Mac so it can sleep"
 
-  public static func step(_ state: inout BatteryState, _ reading: PowerReading, low: Int, resume: Int) -> [Decision] {
+  public static func step(
+    _ state: inout BatteryState, _ reading: PowerReading, low: Int, resume: Int, enabled: Bool = true
+  ) -> [Decision] {
     let percent: Int
     switch reading {
     case .ac, .noBattery:
@@ -43,6 +45,20 @@ public enum Battery {
       ]
     case .battery(let known?):
       percent = known
+    }
+    guard enabled else {
+      guard state.blocked else { return [] }
+      state.blocked = false
+      return [
+        Decision(
+          keyword: .battery,
+          verb: "unblock",
+          fields: [
+            DecisionField(key: "reason", value: "off"),
+            DecisionField(key: "msg", value: "Battery protection off: resuming"),
+          ]
+        )
+      ]
     }
     if percent <= low && !state.blocked {
       state.blocked = true

@@ -20,6 +20,65 @@ struct SettingsTests {
     #expect(settings.keepDisplayOn == false)
     #expect(settings.hotspot == "")
     #expect(settings.hotspotAutoDetect == false)
+    #expect(settings.batteryProtectionEnabled == true)
+    #expect(settings.helperBatteryFloorPercent == 10)
+    #expect(settings.temperatureProtectionEnabled == true)
+    #expect(settings.temperatureReleaseCelsius == 45)
+  }
+
+  @Test func aFileWithoutTheProtectionKeysKeepsTheirDefaults() throws {
+    #expect(try decode(#"{"batteryLowPercent":15}"#) == Settings(batteryLowPercent: 15))
+  }
+
+  @Test func theProtectionSettingsRoundTripThroughJSON() throws {
+    let settings = Settings(
+      batteryProtectionEnabled: false, helperBatteryFloorPercent: 25, temperatureProtectionEnabled: false,
+      temperatureReleaseCelsius: 50)
+    let data = try JSONEncoder().encode(settings)
+    let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    #expect(object["batteryProtectionEnabled"] as? Bool == false)
+    #expect(object["helperBatteryFloorPercent"] as? Int == 25)
+    #expect(object["temperatureProtectionEnabled"] as? Bool == false)
+    #expect(object["temperatureReleaseCelsius"] as? Int == 50)
+    #expect(try JSONDecoder().decode(Settings.self, from: data) == settings)
+  }
+
+  @Test(arguments: [(-1, 5), (0, 5), (4, 5), (5, 5), (25, 25), (50, 50), (51, 50), (1000, 50)])
+  func anOutOfRangeHelperFloorIsClampedAndRecorded(_ value: Int, _ expected: Int) {
+    let validation = Settings(helperBatteryFloorPercent: value).validated()
+    #expect(validation.settings.helperBatteryFloorPercent == expected)
+    let recorded = validation.adjustments.filter { $0.key == "helperBatteryFloorPercent" }
+    if value == expected {
+      #expect(recorded.isEmpty)
+    } else {
+      #expect(
+        recorded == [SettingsAdjustment(key: "helperBatteryFloorPercent", from: String(value), to: String(expected))])
+    }
+  }
+
+  @Test(arguments: [(-5, 35), (20, 35), (34, 35), (35, 35), (45, 45), (60, 60), (61, 60)])
+  func anOutOfRangeReleaseTemperatureIsClampedAndRecorded(_ value: Int, _ expected: Int) {
+    let validation = Settings(temperatureReleaseCelsius: value).validated()
+    #expect(validation.settings.temperatureReleaseCelsius == expected)
+    let recorded = validation.adjustments.filter { $0.key == "temperatureReleaseCelsius" }
+    if value == expected {
+      #expect(recorded.isEmpty)
+    } else {
+      #expect(
+        recorded == [SettingsAdjustment(key: "temperatureReleaseCelsius", from: String(value), to: String(expected))])
+    }
+  }
+
+  @Test func theResumeTemperatureIsFiveDegreesBelowTheRelease() {
+    #expect(Settings.temperatureResumeHysteresisCelsius == 5)
+    #expect(Settings(temperatureReleaseCelsius: 45).temperatureResumeCelsius == 40)
+    #expect(Settings(temperatureReleaseCelsius: 35).temperatureResumeCelsius == 30)
+    #expect(Settings(temperatureReleaseCelsius: 60).temperatureResumeCelsius == 55)
+  }
+
+  @Test func aWrongTypeForAProtectionSwitchIsRejected() {
+    #expect(throws: (any Error).self) { try decode(#"{"batteryProtectionEnabled":"no"}"#) }
+    #expect(throws: (any Error).self) { try decode(#"{"temperatureReleaseCelsius":"hot"}"#) }
   }
 
   @Test func decodingAnEmptyObjectGivesTheDefaults() throws {

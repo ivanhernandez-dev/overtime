@@ -18,6 +18,13 @@ public enum Event: Sendable, Equatable {
   case stop
   case selfTest(SelfTestFacts)
   case helperFacts(HelperFacts)
+  case batteryTemperature(BatteryTemperatureReading)
+}
+
+public enum BatteryTemperatureReading: Sendable, Equatable {
+  case celsius(Int)
+  case unavailable
+  case unreadable
 }
 
 public struct HelperFacts: Sendable, Equatable {

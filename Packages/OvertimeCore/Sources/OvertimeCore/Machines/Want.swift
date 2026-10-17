@@ -66,7 +66,8 @@ public enum Want {
   }
 
   public static func evaluate(
-    _ state: inout WantState, busy: Bool, batteryBlocked: Bool = false, now: Instant, wall: Date, settings: Settings
+    _ state: inout WantState, busy: Bool, batteryBlocked: Bool = false, temperatureBlocked: Bool = false, now: Instant,
+    wall: Date, settings: Settings
   ) -> [Decision] {
     var decisions: [Decision] = []
     if let pause = state.pause, isExpired(pause, now: now, wall: wall) {
@@ -93,6 +94,9 @@ public enum Want {
     if batteryBlocked {
       wanted = false
       reason = "battery"
+    } else if temperatureBlocked {
+      wanted = false
+      reason = "temperature"
     } else if state.pause != nil {
       wanted = false
       reason = "paused"

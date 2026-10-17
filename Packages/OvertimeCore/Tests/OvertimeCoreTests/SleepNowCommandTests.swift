@@ -93,6 +93,7 @@ struct SleepNowCommandTests {
       DecisionKeyword.allCases.map(\.rawValue) == [
         "START", "STOP", "BUSY", "WANT", "STUCK", "ENTRYPOINT", "BATTERY", "OVERRIDE", "HOLD", "LID", "DISPLAY",
         "VERIFY", "WARN", "NET", "SENTINEL", "CHECK", "ERROR", "COMMAND", "SETTINGS", "SELFTEST", "UNINSTALL",
+        "TEMPERATURE",
       ])
   }
 

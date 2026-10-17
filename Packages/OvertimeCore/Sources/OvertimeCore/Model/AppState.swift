@@ -29,9 +29,11 @@ public struct AppState: Sendable, Equatable {
   public var events: EventCounters
   public var selfTest: SelfTestState
   public var helper: HelperIntentState
+  public var temperature: TemperatureState
 
   public init(mode: RunMode) {
     self.helper = HelperIntentState()
+    self.temperature = TemperatureState()
     self.selfTest = SelfTestState()
     self.lid = LidState()
     self.verification = .idle

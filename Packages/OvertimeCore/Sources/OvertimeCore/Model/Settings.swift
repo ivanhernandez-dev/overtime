@@ -11,6 +11,10 @@ public struct Settings: Codable, Sendable, Equatable {
   public var keepDisplayOn: Bool
   public var hotspot: String
   public var hotspotAutoDetect: Bool
+  public var batteryProtectionEnabled: Bool
+  public var helperBatteryFloorPercent: Int
+  public var temperatureProtectionEnabled: Bool
+  public var temperatureReleaseCelsius: Int
 
   public init(
     batteryLowPercent: Int = 10,
@@ -22,7 +26,11 @@ public struct Settings: Codable, Sendable, Equatable {
     ignoredEntrypoints: [String] = ["sdk-*"],
     keepDisplayOn: Bool = false,
     hotspot: String = "",
-    hotspotAutoDetect: Bool = false
+    hotspotAutoDetect: Bool = false,
+    batteryProtectionEnabled: Bool = true,
+    helperBatteryFloorPercent: Int = 10,
+    temperatureProtectionEnabled: Bool = true,
+    temperatureReleaseCelsius: Int = 45
   ) {
     self.batteryLowPercent = batteryLowPercent
     self.batteryResumePercent = batteryResumePercent
@@ -34,6 +42,10 @@ public struct Settings: Codable, Sendable, Equatable {
     self.keepDisplayOn = keepDisplayOn
     self.hotspot = hotspot
     self.hotspotAutoDetect = hotspotAutoDetect
+    self.batteryProtectionEnabled = batteryProtectionEnabled
+    self.helperBatteryFloorPercent = helperBatteryFloorPercent
+    self.temperatureProtectionEnabled = temperatureProtectionEnabled
+    self.temperatureReleaseCelsius = temperatureReleaseCelsius
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -47,6 +59,10 @@ public struct Settings: Codable, Sendable, Equatable {
     case keepDisplayOn
     case hotspot
     case hotspotAutoDetect
+    case batteryProtectionEnabled
+    case helperBatteryFloorPercent
+    case temperatureProtectionEnabled
+    case temperatureReleaseCelsius
   }
 
   public init(from decoder: any Decoder) throws {
@@ -70,6 +86,18 @@ public struct Settings: Codable, Sendable, Equatable {
     hotspot = try container.decodeIfPresent(String.self, forKey: .hotspot) ?? defaults.hotspot
     hotspotAutoDetect =
       try container.decodeIfPresent(Bool.self, forKey: .hotspotAutoDetect) ?? defaults.hotspotAutoDetect
+    batteryProtectionEnabled =
+      try container.decodeIfPresent(Bool.self, forKey: .batteryProtectionEnabled)
+      ?? defaults.batteryProtectionEnabled
+    helperBatteryFloorPercent =
+      try container.decodeIfPresent(Int.self, forKey: .helperBatteryFloorPercent)
+      ?? defaults.helperBatteryFloorPercent
+    temperatureProtectionEnabled =
+      try container.decodeIfPresent(Bool.self, forKey: .temperatureProtectionEnabled)
+      ?? defaults.temperatureProtectionEnabled
+    temperatureReleaseCelsius =
+      try container.decodeIfPresent(Int.self, forKey: .temperatureReleaseCelsius)
+      ?? defaults.temperatureReleaseCelsius
   }
 
   public static func defaultTranscriptRoots(environment: [String: String], homeDirectory: String) -> [String] {
@@ -118,6 +146,13 @@ extension Settings {
   public static let stuckWindowMinSeconds: Double = 60
   public static let stuckWindowMaxSeconds: Double = 14_400
   public static let maxSSIDBytes = 32
+  public static let helperBatteryFloorRange = 5...50
+  public static let temperatureReleaseRange = 35...60
+  public static let temperatureResumeHysteresisCelsius = 5
+
+  public var temperatureResumeCelsius: Int {
+    temperatureReleaseCelsius - Self.temperatureResumeHysteresisCelsius
+  }
 
   public static func isValidSSID(_ name: String) -> Bool {
     let bytes = name.utf8.count
@@ -143,6 +178,12 @@ extension Settings {
     record("batteryLowPercent", String(batteryLowPercent), String(result.batteryLowPercent))
     result.batteryResumePercent = min(max(batteryResumePercent, result.batteryLowPercent + 1), Self.batteryResumeMax)
     record("batteryResumePercent", String(batteryResumePercent), String(result.batteryResumePercent))
+    result.helperBatteryFloorPercent = min(
+      max(helperBatteryFloorPercent, Self.helperBatteryFloorRange.lowerBound), Self.helperBatteryFloorRange.upperBound)
+    record("helperBatteryFloorPercent", String(helperBatteryFloorPercent), String(result.helperBatteryFloorPercent))
+    result.temperatureReleaseCelsius = min(
+      max(temperatureReleaseCelsius, Self.temperatureReleaseRange.lowerBound), Self.temperatureReleaseRange.upperBound)
+    record("temperatureReleaseCelsius", String(temperatureReleaseCelsius), String(result.temperatureReleaseCelsius))
     result.transcriptWindowSeconds = clamp(
       transcriptWindowSeconds, Self.transcriptWindowRange, fallback: defaults.transcriptWindowSeconds)
     record(

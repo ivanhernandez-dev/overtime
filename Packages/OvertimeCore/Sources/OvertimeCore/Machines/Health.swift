@@ -37,7 +37,8 @@ public enum Health {
         &state, now: now, starts: agents.terminalAgentStarts, lastTranscriptEventAt: lastTranscriptEventAt,
         startedAt: startedAt)
     case .transcriptActivity, .power, .command, .launched, .effectResult, .systemWillSleep, .systemHasPoweredOn,
-      .lidChanged, .sentinelLost, .screenLock, .netProbeResult, .netCycleDone, .stop, .selfTest, .helperFacts:
+      .lidChanged, .sentinelLost, .screenLock, .netProbeResult, .netCycleDone, .stop, .selfTest, .helperFacts,
+      .batteryTemperature:
       return []
     }
   }

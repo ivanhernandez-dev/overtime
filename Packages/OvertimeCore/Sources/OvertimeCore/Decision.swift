@@ -22,6 +22,7 @@ public enum DecisionKeyword: String, Sendable, CaseIterable {
   case settings = "SETTINGS"
   case selftest = "SELFTEST"
   case uninstall = "UNINSTALL"
+  case temperature = "TEMPERATURE"
 }
 
 public struct DecisionField: Sendable, Equatable {

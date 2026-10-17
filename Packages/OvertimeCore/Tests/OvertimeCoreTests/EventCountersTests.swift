@@ -101,6 +101,23 @@ struct EventCountersTests {
     #expect(harness.state.events.batteryReleases == 0)
   }
 
+  @Test func wantGoingOffForTheTemperatureLimitRaisesTemperatureReleases() {
+    var harness = Self.harness()
+    _ = Self.busyAt(&harness, 0)
+    #expect(harness.state.want.wanted == true)
+    _ = harness.send(.batteryTemperature(.celsius(46)), at: 1)
+    #expect(harness.state.want.wanted == false)
+    #expect(harness.state.events.temperatureReleases == 1)
+    #expect(harness.state.events.batteryReleases == 0)
+  }
+
+  @Test func theTemperatureLimitWhileNothingIsWantedIsNotARelease() {
+    var harness = Self.harness()
+    _ = harness.tick(at: 0)
+    _ = harness.send(.batteryTemperature(.celsius(46)), at: 1)
+    #expect(harness.state.events.temperatureReleases == 0)
+  }
+
   @Test func busyTurningOnBelowTheFloorRaisesBusyStartsBelowFloor() {
     var harness = Self.harness()
     _ = harness.tick(at: 0)

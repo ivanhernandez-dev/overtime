@@ -78,7 +78,8 @@ public enum Reducer {
       ).map(Effect.log)
     case .power(let reading):
       var decisions = Battery.step(
-        &state.battery, reading, low: settings.batteryLowPercent, resume: settings.batteryResumePercent)
+        &state.battery, reading, low: settings.batteryLowPercent, resume: settings.batteryResumePercent,
+        enabled: settings.batteryProtectionEnabled)
       if state.busy.busy != nil {
         decisions += busyAndWant(&state, now: now, wall: event.wall, settings: settings)
       }
@@ -102,6 +103,14 @@ public enum Reducer {
     case .helperFacts(let facts):
       state.helper.facts = facts
       return []
+    case .batteryTemperature(let reading):
+      var decisions = Temperature.step(
+        &state.temperature, reading, enabled: settings.temperatureProtectionEnabled,
+        release: settings.temperatureReleaseCelsius)
+      if state.busy.busy != nil {
+        decisions += busyAndWant(&state, now: now, wall: event.wall, settings: settings)
+      }
+      return decisions.map(Effect.log) + Hold.reconcile(&state, now: now, settings: settings)
     case .effectResult(let id, let outcome):
       let results =
         HelperIntent.handleResult(id, outcome, state: &state, now: now)
@@ -241,8 +250,8 @@ public enum Reducer {
     let decisions = Busy.evaluate(&state.busy, now: now, settings: settings)
     return decisions
       + Want.evaluate(
-        &state.want, busy: state.busy.busy ?? false, batteryBlocked: state.battery.blocked, now: now, wall: wall,
-        settings: settings)
+        &state.want, busy: state.busy.busy ?? false, batteryBlocked: state.battery.blocked,
+        temperatureBlocked: state.temperature.blocked, now: now, wall: wall, settings: settings)
   }
 
   public static func nextDeadline(_ state: AppState, _ settings: Settings) -> Instant? {

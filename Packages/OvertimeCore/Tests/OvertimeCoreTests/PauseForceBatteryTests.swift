@@ -96,6 +96,19 @@ struct PauseForceBatteryTests {
     #expect(harness.state.want.wanted == false)
   }
 
+  @Test func forceNeverWinsOverTheTemperatureLimit() {
+    var harness = Self.idleHarness()
+    _ = harness.send(.batteryTemperature(.celsius(50)), at: 1)
+    #expect(harness.state.temperature.blocked)
+    let effects = harness.send(.command(.force(.indefinite)), at: 2)
+    #expect(ScenarioHarness.decisions(effects) == [Self.forceLine("indefinite")])
+    #expect(harness.state.want.wanted == false)
+    #expect(harness.state.want.reason == "temperature")
+    _ = harness.activity(writtenAt: 3, entrypoint: "cli", seenAt: 3)
+    #expect(ScenarioHarness.wantLines(harness.tick(at: 3)).isEmpty)
+    #expect(harness.state.want.wanted == false)
+  }
+
   @Test func theBatteryFloorReleasesAnActiveForce() {
     var harness = Self.idleHarness()
     _ = harness.send(.command(.force(.indefinite)), at: 1)
