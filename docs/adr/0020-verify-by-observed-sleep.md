@@ -63,3 +63,7 @@ Measured on a MacBook Pro M5 Max running macOS 27.0 (26A428), in spikes 001, 002
 - Spike 006 (PARTIAL): foreign assertions (every busy Claude Code session's `caffeinate -i -t 300`, other apps, audio) affect idle-sleep measurements.
 
 Local reference (not needed to read this ADR): `.claude/skills/spike-findings-overtime/references/lid-hold-clamshell.md`.
+
+## Amended by 0025 (2026-10-17)
+
+HOLD-12's check follows the lid-closed hold, not only keep-awake: a release because the charger was unplugged under Only on power adapter, while Claude still works, is checked like any other, plugging back in during the check cancels it, and a sleep while the lid-closed hold is off is not counted as unexpected. See [0025](0025-lid-closed-keep-awake-setting-and-custom-durations.md).

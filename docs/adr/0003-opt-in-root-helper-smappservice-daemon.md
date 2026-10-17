@@ -72,3 +72,7 @@ Measured on a MacBook Pro M5 Max running macOS 27.0 (26A428), in spike 005, on 2
 The verdict is PARTIAL because the pinned-binary strategy rests on one identical-hash update, T2 behaviour is unknown, and the thermal release had not been chosen at the time ([0012](0012-helper-thermal-release.md) has since chosen it).
 
 Local reference (not needed to read this ADR): `.claude/skills/spike-findings-overtime/references/root-helper.md`.
+
+## Amended by 0025 (2026-10-17)
+
+The app engages the helper only while the lid-closed hold is allowed. With Never it never engages; with Only on power adapter the app releases it when the charger is unplugged, before its own hold, so unplug protection then covers display changes only. The helper itself does not change (helper version 2, no re-approval). See [0025](0025-lid-closed-keep-awake-setting-and-custom-durations.md).

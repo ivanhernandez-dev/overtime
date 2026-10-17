@@ -47,3 +47,7 @@ Measured on a MacBook Pro M5 Max running macOS 27.0 (26A428), in spike 006, on 2
 - With `pmset displaysleepnow` run at lid close, the session locked within 1 s or less, stayed locked while closed, and was locked on opening.
 
 Local reference (not needed to read this ADR): `.claude/skills/spike-findings-overtime/references/idle-display-lock.md`.
+
+## Amended by 0025 (2026-10-17)
+
+LID-01 and LID-02 apply only while the lid-closed hold is allowed. With Never, or on battery with Only on power adapter, Overtime holds nothing when the lid closes; the Mac sleeps as usual and locks as it goes to sleep (with the lock delay LID-04 checks), so Overtime does not turn the display off. See [0025](0025-lid-closed-keep-awake-setting-and-custom-durations.md).

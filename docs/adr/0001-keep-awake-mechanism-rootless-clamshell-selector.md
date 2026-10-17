@@ -76,3 +76,7 @@ Measured on a MacBook Pro M5 Max running macOS 27.0 (26A428), in spikes 001, 002
 - Spike 003, end to end: `kill -9` of the holder with the lid closed → the sentinel cleared the bit 0.003 s later → `willSleep` 0.014 s after the kill → "Clamshell Sleep".
 
 Local reference (not needed to read this ADR): `.claude/skills/spike-findings-overtime/references/lid-hold-clamshell.md`.
+
+## Amended by 0025 (2026-10-17)
+
+The selector holds a closed lid only while the setting Keep awake with the lid closed allows it: always (the default, the behaviour above), only while the Mac is on its power adapter, or never. Releases are unchanged, and the launch self-test still writes it on and off once with the lid open. See [0025](0025-lid-closed-keep-awake-setting-and-custom-durations.md).
