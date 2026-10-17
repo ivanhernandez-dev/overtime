@@ -20,6 +20,7 @@ struct ReadmeScreenshotTests {
   static let offscreenOrigin = CGPoint(x: -20_000, y: -20_000)
   static let heldSeconds: Double = 5025
   static let powerPercent = 82
+  static let batteryCelsius = 31
   static let byteLimit = 409_600
   static let patchPoints: CGFloat = 2
   static let rowProbeInset: CGFloat = 14
@@ -158,6 +159,19 @@ struct ReadmeScreenshotTests {
       kinds: [.selectedRow, .closeButton])
     try record(unplug, stem: "settings-unplug-protection-dark", into: folder, report: &report)
 
+    settingsBound.host.publish(idleSnapshot(settingsBound))
+    #expect(await waitUntil { settings.batteryTemperatureText == "\(Self.batteryCelsius)°C" })
+    #expect(settings.batteryProtectionEnabled)
+    #expect(!settings.temperatureProtectionEnabled)
+    #expect(!settings.helperInstalled)
+    #expect(SettingsPane.allCases.allSatisfy { settings.sidebarBadge(for: $0) == nil })
+    settings.select(.battery)
+    #expect(settings.selectedPane == .battery)
+    let battery = try await activeCapture(
+      SettingsWindow(model: settings), title: SettingsPane.battery.title, size: SettingsWindow.contentSize,
+      kinds: [.selectedRow, .closeButton])
+    try record(battery, stem: "settings-battery-dark", into: folder, report: &report)
+
     let onboardingBound = PanelModelTests.Bound()
     onboardingBound.model.attachLoginItem(PanelModelTests.FakeLoginItem(status: .enabled))
     let onboarding = OnboardingModel(
@@ -172,10 +186,23 @@ struct ReadmeScreenshotTests {
       kinds: [.closeButton])
     try record(welcome, stem: "onboarding-dark", into: folder, report: &report)
 
+    let setup = try OnboardingWindowTests.Fixture(login: .enabled)
+    setup.model.begin()
+    setup.walk(to: .selfTest)
+    #expect(setup.model.currentStep == .selfTest)
+    #expect(setup.model.shownSelfTest == .waiting)
+    #expect(!setup.model.canStartSelfTest)
+    #expect(setup.model.defaultButton.action == .finish)
+    let complete = try await activeCapture(
+      OnboardingWindow(model: setup.model), title: OnboardingWindow.title, size: OnboardingWindow.contentSize,
+      kinds: [.closeButton])
+    #expect(setup.model.shownSelfTest == .waiting)
+    try record(complete, stem: "onboarding-complete-dark", into: folder, report: &report)
+
     try report.text.write(to: folder.appendingPathComponent("checks.txt"), atomically: true, encoding: .utf8)
 
-    #expect(report.images.count == 4)
-    #expect(report.probes.count == 10)
+    #expect(report.images.count == 6)
+    #expect(report.probes.count == 15)
     #expect(report.controls.count == 2)
     for probe in report.probes {
       #expect(probe.measured.pass, "probe \(probe.stem) \(probe.measured.verdict)")
@@ -201,6 +228,12 @@ struct ReadmeScreenshotTests {
     return EngineSnapshot(
       busy: true, wanted: true, reason: "busy", lidClosed: false, sessions: sessions,
       wantedSince: bound.started(secondsAgo: Self.heldSeconds), power: .ac(percent: Self.powerPercent))
+  }
+
+  private func idleSnapshot(_ bound: PanelModelTests.Bound) -> EngineSnapshot {
+    EngineSnapshot(
+      busy: false, wanted: false, reason: "idle", lidClosed: false, power: .ac(percent: Self.powerPercent),
+      batteryTemperature: .celsius(Self.batteryCelsius))
   }
 
   private func record(
