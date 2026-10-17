@@ -16,6 +16,7 @@ public enum HelperReleaseReason: String, Sendable, Equatable, CaseIterable {
   case stop
   case notReady
   case temperature
+  case lidClosedHoldOff
 }
 
 public struct HelperIntentState: Sendable, Equatable {
@@ -51,10 +52,11 @@ public enum HelperIntent {
   public static let retrySeconds: Double = 30
   public static let helperTemperatureCeilingCelsius = 60
 
-  public static func desired(_ state: AppState) -> Bool {
+  public static func desired(_ state: AppState, settings: Settings = Settings()) -> Bool {
     state.want.wanted == true && lidClosed(state) && !state.battery.blocked && state.helper.facts?.ready == true
       && !state.hold.stopping && !state.helper.suppressedUntilWake && !state.helper.atOrBelowHelperFloor
       && !state.temperature.blocked && !state.helper.atOrAboveHelperCeiling
+      && Hold.lidClosedAllowed(state, settings: settings)
   }
 
   public static func step(
@@ -63,16 +65,16 @@ public enum HelperIntent {
     noteSleep(&state, event: event, batch: batch)
     notePower(&state, event: event, settings: settings)
     noteTemperature(&state, event: event, settings: settings)
-    let wanted = desired(state)
+    let wanted = desired(state, settings: settings)
     switch state.helper.phase {
     case .idle:
       guard wanted, state.lastFullWake == true else { return ([], []) }
       return ([], engage(&state, settings: settings))
     case .engaging:
       guard !wanted else { return ([], []) }
-      return (release(&state), [])
+      return (release(&state, settings: settings), [])
     case .engaged:
-      guard wanted else { return (release(&state), []) }
+      guard wanted else { return (release(&state, settings: settings), []) }
       if state.helper.sentLimits != HelperLimits(settings: settings) {
         return ([], engage(&state, settings: settings, reason: "limits"))
       }
@@ -82,7 +84,7 @@ public enum HelperIntent {
       state.helper.lastContact = now
       return ([], [.helper(.heartbeat, id: id)])
     case .failed(let retryAt):
-      guard wanted else { return (release(&state), []) }
+      guard wanted else { return (release(&state, settings: settings), []) }
       guard isTick(event), now >= retryAt, state.lastFullWake == true else { return ([], []) }
       return ([], engage(&state, settings: settings))
     case .releasing:
@@ -197,12 +199,13 @@ public enum HelperIntent {
     return nil
   }
 
-  static func releaseReason(_ state: AppState) -> HelperReleaseReason {
+  static func releaseReason(_ state: AppState, settings: Settings) -> HelperReleaseReason {
     if state.hold.stopping { return .stop }
     if state.helper.suppressedUntilWake { return .sleepNow }
     if state.helper.facts?.ready != true { return .notReady }
     if state.battery.blocked || state.helper.atOrBelowHelperFloor { return .battery }
     if state.temperature.blocked || state.helper.atOrAboveHelperCeiling { return .temperature }
+    if !Hold.lidClosedAllowed(state, settings: settings) { return .lidClosedHoldOff }
     if !lidClosed(state) { return .lidOpen }
     return .notWanted
   }
@@ -218,8 +221,8 @@ public enum HelperIntent {
     ]
   }
 
-  static func release(_ state: inout AppState) -> [Effect] {
-    let reason = DecisionField(key: "reason", value: releaseReason(state).rawValue)
+  static func release(_ state: inout AppState, settings: Settings) -> [Effect] {
+    let reason = DecisionField(key: "reason", value: releaseReason(state, settings: settings).rawValue)
     let id = Hold.allocate(&state)
     state.helper.phase = .releasing(id)
     state.helper.heartbeat = nil

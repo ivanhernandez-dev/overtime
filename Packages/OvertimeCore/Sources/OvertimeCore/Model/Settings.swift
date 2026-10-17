@@ -15,6 +15,7 @@ public struct Settings: Codable, Sendable, Equatable {
   public var helperBatteryFloorPercent: Int
   public var temperatureProtectionEnabled: Bool
   public var temperatureReleaseCelsius: Int
+  public var lidClosedKeepAwake: LidClosedKeepAwake
 
   public init(
     batteryLowPercent: Int = 10,
@@ -30,7 +31,8 @@ public struct Settings: Codable, Sendable, Equatable {
     batteryProtectionEnabled: Bool = true,
     helperBatteryFloorPercent: Int = 10,
     temperatureProtectionEnabled: Bool = false,
-    temperatureReleaseCelsius: Int = 45
+    temperatureReleaseCelsius: Int = 45,
+    lidClosedKeepAwake: LidClosedKeepAwake = .always
   ) {
     self.batteryLowPercent = batteryLowPercent
     self.batteryResumePercent = batteryResumePercent
@@ -46,6 +48,7 @@ public struct Settings: Codable, Sendable, Equatable {
     self.helperBatteryFloorPercent = helperBatteryFloorPercent
     self.temperatureProtectionEnabled = temperatureProtectionEnabled
     self.temperatureReleaseCelsius = temperatureReleaseCelsius
+    self.lidClosedKeepAwake = lidClosedKeepAwake
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -63,6 +66,7 @@ public struct Settings: Codable, Sendable, Equatable {
     case helperBatteryFloorPercent
     case temperatureProtectionEnabled
     case temperatureReleaseCelsius
+    case lidClosedKeepAwake
   }
 
   public init(from decoder: any Decoder) throws {
@@ -98,6 +102,9 @@ public struct Settings: Codable, Sendable, Equatable {
     temperatureReleaseCelsius =
       try container.decodeIfPresent(Int.self, forKey: .temperatureReleaseCelsius)
       ?? defaults.temperatureReleaseCelsius
+    lidClosedKeepAwake =
+      try container.decodeIfPresent(LidClosedKeepAwake.self, forKey: .lidClosedKeepAwake)
+      ?? defaults.lidClosedKeepAwake
   }
 
   public static func defaultTranscriptRoots(environment: [String: String], homeDirectory: String) -> [String] {

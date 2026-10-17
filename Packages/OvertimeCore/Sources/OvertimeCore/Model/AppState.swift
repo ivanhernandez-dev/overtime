@@ -30,8 +30,10 @@ public struct AppState: Sendable, Equatable {
   public var selfTest: SelfTestState
   public var helper: HelperIntentState
   public var temperature: TemperatureState
+  public var lastPower: PowerReading?
 
   public init(mode: RunMode) {
+    self.lastPower = nil
     self.helper = HelperIntentState()
     self.temperature = TemperatureState()
     self.selfTest = SelfTestState()

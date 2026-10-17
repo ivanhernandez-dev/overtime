@@ -24,6 +24,28 @@ struct SettingsTests {
     #expect(settings.helperBatteryFloorPercent == 10)
     #expect(settings.temperatureProtectionEnabled == false)
     #expect(settings.temperatureReleaseCelsius == 45)
+    #expect(settings.lidClosedKeepAwake == .always)
+  }
+
+  @Test func aFileWithoutTheLidClosedKeyKeepsAlways() throws {
+    let settings = try decode(#"{"batteryLowPercent":15}"#)
+    #expect(settings == Settings(batteryLowPercent: 15))
+    #expect(settings.lidClosedKeepAwake == .always)
+  }
+
+  @Test func theLidClosedSettingRoundTripsThroughJSON() throws {
+    for value in LidClosedKeepAwake.allCases {
+      let settings = Settings(lidClosedKeepAwake: value)
+      let data = try JSONEncoder().encode(settings)
+      let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+      #expect(object["lidClosedKeepAwake"] as? String == value.rawValue)
+      #expect(try JSONDecoder().decode(Settings.self, from: data) == settings)
+    }
+  }
+
+  @Test func anUnknownLidClosedValueIsRejected() {
+    #expect(throws: (any Error).self) { try decode(#"{"lidClosedKeepAwake":"sometimes"}"#) }
+    #expect(throws: (any Error).self) { try decode(#"{"lidClosedKeepAwake":true}"#) }
   }
 
   @Test func aFileWithoutTheProtectionKeysKeepsTheirDefaults() throws {

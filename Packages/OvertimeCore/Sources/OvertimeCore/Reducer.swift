@@ -77,6 +77,7 @@ public enum Reducer {
         lastTranscriptEventAt: state.busy.lastTranscriptEventAt, startedAt: startedAt
       ).map(Effect.log)
     case .power(let reading):
+      state.lastPower = reading
       var decisions = Battery.step(
         &state.battery, reading, low: settings.batteryLowPercent, resume: settings.batteryResumePercent,
         enabled: settings.batteryProtectionEnabled)
@@ -124,7 +125,7 @@ public enum Reducer {
       LidCloseHold.poweredOn(state: &state, now: now)
       return Hold.reconcile(&state, now: now, settings: settings)
     case .sentinelLost:
-      return LidCloseHold.sentinelLost(state: &state, now: now)
+      return LidCloseHold.sentinelLost(state: &state, now: now, settings: settings)
     case .stop:
       return Hold.stop(state: &state)
     case .screenLock(let status):

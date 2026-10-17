@@ -562,7 +562,9 @@ struct HelperIntentTests {
     let line = DecisionFormatter.line(
       Self.releaseLine(.lidOpen), wall: Date(timeIntervalSince1970: 0), timeZone: TimeZone(secondsFromGMT: 0) ?? .gmt)
     #expect(line.hasSuffix(" HOLD helper release reason=lidOpen"))
-    let reasons = ["lidOpen", "battery", "notWanted", "sleepNow", "stop", "notReady", "temperature"]
+    let reasons = [
+      "lidOpen", "battery", "notWanted", "sleepNow", "stop", "notReady", "temperature", "lidClosedHoldOff",
+    ]
     #expect(HelperReleaseReason.allCases.map(\.rawValue) == reasons)
   }
 

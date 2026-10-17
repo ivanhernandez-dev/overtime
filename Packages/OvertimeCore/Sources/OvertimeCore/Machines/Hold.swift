@@ -45,8 +45,10 @@ public struct HoldState: Sendable, Equatable {
   public var onWrites: [EffectID: OnWrite]
   public var lateWriteClearAt: Instant?
   public var releaseFailures: Int
+  public var lidClosedAllowed: Bool
 
   public init(idle: BackendPhase = .released, display: BackendPhase = .released, errorActive: Bool = false) {
+    self.lidClosedAllowed = true
     self.idle = idle
     self.display = display
     self.lidClose = .released
@@ -102,7 +104,14 @@ public enum Hold {
   ) -> [Effect] {
     guard !state.hold.stopping else { return [] }
     let wanted = state.want.wanted == true
-    let lidClose = LidCloseHold.step(desired: wanted, state: &state, now: now, tick: tick)
+    let allowed = lidClosedAllowed(state, settings: settings)
+    var answer: [Effect] = []
+    if allowed != state.hold.lidClosedAllowed {
+      state.hold.lidClosedAllowed = allowed
+      answer = [lidClosedLine(allowed: allowed, state: state, settings: settings)]
+    }
+    let lidClose = LidCloseHold.step(
+      desired: lidCloseDesired(state, settings: settings), state: &state, now: now, tick: tick)
     let idle = step(.idle, desired: wanted, state: &state, now: now, tick: tick)
     let display = step(
       .display, desired: displayDesired(state, wanted: wanted, settings: settings), state: &state, now: now,
@@ -111,7 +120,26 @@ public enum Hold {
       if case .displayAssertion(.release, _) = effect { return true }
       return false
     }
-    return releasesDisplay ? display + lidClose + idle : lidClose + idle + display
+    return answer + (releasesDisplay ? display + lidClose + idle : lidClose + idle + display)
+  }
+
+  public static func lidClosedAllowed(_ state: AppState, settings: Settings) -> Bool {
+    settings.lidClosedKeepAwake.allows(power: state.lastPower)
+  }
+
+  public static func lidCloseDesired(_ state: AppState, settings: Settings) -> Bool {
+    state.want.wanted == true && lidClosedAllowed(state, settings: settings)
+  }
+
+  static func lidClosedLine(allowed: Bool, state: AppState, settings: Settings) -> Effect {
+    .log(
+      Decision(
+        keyword: .hold, verb: "lidClosed",
+        fields: [
+          DecisionField(key: "allowed", value: allowed ? "true" : "false"),
+          DecisionField(key: "setting", value: settings.lidClosedKeepAwake.rawValue),
+          DecisionField(key: "power", value: LidClosedKeepAwake.powerWord(state.lastPower)),
+        ]))
   }
 
   public static func stop(state: inout AppState) -> [Effect] {
@@ -396,7 +424,7 @@ public enum LidCloseHold {
     state.hold.lidClose != .released || state.persisted.ownsHold || state.hold.pendingLaunch != nil
   }
 
-  public static func sentinelLost(state: inout AppState, now: Instant) -> [Effect] {
+  public static func sentinelLost(state: inout AppState, now: Instant, settings: Settings = Settings()) -> [Effect] {
     let lost = Effect.log(Decision(keyword: .sentinel, verb: "lost"))
     let replaceArmed: [Effect] = [.sentinel(.respawn), .sentinel(.arm)]
     guard !state.hold.stopping else {
@@ -408,7 +436,7 @@ public enum LidCloseHold {
     state.hold.wakeBurst.removeAll()
     state.hold.releaseFailures = 0
     let clear = release(.watchdogLost, state: &state)
-    guard state.want.wanted == true, state.lastFullWake == true else {
+    guard Hold.lidCloseDesired(state, settings: settings), state.lastFullWake == true else {
       return [lost, clear] + replaceArmed
     }
     let reengage = engage(.reassert, state: &state, now: now).filter { $0 != .sentinel(.arm) }
