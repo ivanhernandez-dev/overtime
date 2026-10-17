@@ -307,7 +307,7 @@ public final class LiveInterpreter: EffectInterpreter {
         results.append(.effectResult(id, await pmset(Self.sleepArguments, wall: wall)))
       case .net:
         continue
-      case .helper(let action, let id):
+      case .helper(let action, let id, _):
         results.append(.effectResult(id, await helper(action)))
       }
     }

@@ -47,7 +47,23 @@ public enum Effect: Sendable, Equatable {
   case displaySleepNow(id: EffectID)
   case requestSleep(id: EffectID)
   case net(NetEffect)
-  case helper(HelperAction, id: EffectID)
+  case helper(HelperAction, id: EffectID, limits: HelperLimits? = nil)
+}
+
+public struct HelperLimits: Sendable, Equatable {
+  public var batteryFloorPercent: Int
+  public var temperatureCeilingCelsius: Int?
+
+  public init(batteryFloorPercent: Int, temperatureCeilingCelsius: Int?) {
+    self.batteryFloorPercent = batteryFloorPercent
+    self.temperatureCeilingCelsius = temperatureCeilingCelsius
+  }
+
+  public init(settings: Settings) {
+    self.init(
+      batteryFloorPercent: settings.helperBatteryFloorPercent,
+      temperatureCeilingCelsius: settings.temperatureProtectionEnabled ? settings.temperatureReleaseCelsius : nil)
+  }
 }
 
 public enum NetEffect: Sendable, Equatable {

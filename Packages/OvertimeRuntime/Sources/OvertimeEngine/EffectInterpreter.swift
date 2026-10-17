@@ -60,7 +60,7 @@ public struct RecordingInterpreter: EffectInterpreter {
           logger.log(Decision(keyword: .error, verb: "state write failed"), wall: wall, timeZone: timeZone)
         }
       case .idleAssertion(_, let id), .displayAssertion(_, let id), .clamshell(_, let id, _),
-        .displaySleepNow(let id), .requestSleep(let id), .helper(_, let id):
+        .displaySleepNow(let id), .requestSleep(let id), .helper(_, let id, _):
         results.append(.effectResult(id, .succeeded))
       case .sentinel, .net:
         continue

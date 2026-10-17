@@ -21,7 +21,7 @@ final class CapturingInterpreter: EffectInterpreter {
     let results: [Event] = effects.compactMap { effect in
       switch effect {
       case .idleAssertion(_, let id), .displayAssertion(_, let id), .clamshell(_, let id, _),
-        .displaySleepNow(let id), .requestSleep(let id), .helper(_, let id):
+        .displaySleepNow(let id), .requestSleep(let id), .helper(_, let id, _):
         .effectResult(id, .succeeded)
       case .log, .persist, .sentinel, .net:
         nil

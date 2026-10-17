@@ -13,7 +13,7 @@ public enum Reducer {
       state.persisted = derived
       effects.append(.persist(derived))
     }
-    let helper = HelperIntent.step(&state, event: event.event, now: event.mono, batch: effects)
+    let helper = HelperIntent.step(&state, event: event.event, now: event.mono, batch: effects, settings: settings)
     return helper.before + effects + helper.after
   }
 

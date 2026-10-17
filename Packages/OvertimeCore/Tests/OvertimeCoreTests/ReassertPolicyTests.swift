@@ -49,7 +49,7 @@ struct HoldDriver {
           queue.append(.effectResult(id, clamshellOutcome))
         case .idleAssertion(_, let id), .displayAssertion(_, let id), .displaySleepNow(let id), .requestSleep(let id):
           queue.append(.effectResult(id, .succeeded))
-        case .helper(_, let id):
+        case .helper(_, let id, _):
           queue.append(.effectResult(id, helperOutcome))
         case .log(let decision):
           decisions.append((seconds, decision))

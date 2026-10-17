@@ -26,7 +26,7 @@ struct StopSequenceTests {
       case .displayAssertion(let action, _): .display(release: action == .release)
       case .displaySleepNow: .displaySleepNow
       case .requestSleep: .requestSleep
-      case .helper(let action, _): .helper(action)
+      case .helper(let action, _, _): .helper(action)
       case .log, .net: nil
       }
     }

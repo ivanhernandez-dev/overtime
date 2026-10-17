@@ -54,14 +54,14 @@ struct HelperIntentTests {
 
   static func helperActions(_ effects: some Sequence<Effect>) -> [HelperAction] {
     effects.compactMap { effect in
-      if case .helper(let action, _) = effect { return action }
+      if case .helper(let action, _, _) = effect { return action }
       return nil
     }
   }
 
   static func helperID(_ action: HelperAction, in effects: [Effect]) -> EffectID? {
     effects.compactMap { effect -> EffectID? in
-      if case .helper(action, let id) = effect { return id }
+      if case .helper(action, let id, _) = effect { return id }
       return nil
     }.first
   }
@@ -98,7 +98,7 @@ struct HelperIntentTests {
     #expect(driver.harness.state.helper.phase == .idle)
     #expect(Self.helperActions(driver.batches.flatMap { $0 }).isEmpty)
     let effects = driver.harness.send(Self.tick(closed: true), at: 2)
-    guard case .helper(.engage, let id)? = effects.last else {
+    guard case .helper(.engage, let id, _)? = effects.last else {
       Issue.record("the batch does not end with a helper engage: \(effects)")
       return
     }
@@ -148,7 +148,10 @@ struct HelperIntentTests {
     #expect(Self.helperActions(driver.batches.flatMap { $0 }).isEmpty)
     let effects = driver.harness.send(.helperFacts(Self.ready), at: 2)
     let id = try #require(Self.helperID(.engage, in: effects))
-    #expect(effects == [.log(Self.engageLine), .helper(.engage, id: id)])
+    #expect(
+      effects == [
+        .log(Self.engageLine), .helper(.engage, id: id, limits: driver.harness.state.helper.sentLimits),
+      ])
     #expect(driver.harness.state.helper.facts == Self.ready)
   }
 
@@ -195,7 +198,7 @@ struct HelperIntentTests {
   @Test func whenTheLidOpensTheHelperReleaseIsTheFirstEffectOfItsBatch() throws {
     var driver = Self.engaged()
     let effects = driver.harness.send(Self.lidOpened, at: 5)
-    guard case .helper(.release, let id)? = effects.first else {
+    guard case .helper(.release, let id, _)? = effects.first else {
       Issue.record("the batch does not start with a helper release: \(effects)")
       return
     }
@@ -212,7 +215,7 @@ struct HelperIntentTests {
   @Test func aBatchThatAlsoClearsTheAppsOwnBitReleasesTheHelperBeforeIt() throws {
     var driver = Self.engaged()
     let effects = driver.harness.send(Self.tick(closed: false, agents: .none), at: 400)
-    guard case .helper(.release, _)? = effects.first else {
+    guard case .helper(.release, _, _)? = effects.first else {
       Issue.record("the batch does not start with a helper release: \(effects)")
       return
     }
@@ -332,8 +335,139 @@ struct HelperIntentTests {
     #expect(HelperIntent.desired(state))
   }
 
-  @Test func theAppsFloorForTheHelperIsTheHelpersOwn() {
-    #expect(HelperIntent.helperBatteryFloorPercent == 10)
+  @Test func theAppsDefaultFloorForTheHelperIs10Percent() {
+    #expect(Settings().helperBatteryFloorPercent == 10)
+  }
+
+  static let configuredFloor: Comment =
+    "H-CR-01 at a non-default floor: the helper refuses and releases at or below the configured floor on any power source, so the app stops asking at the same configured value"
+
+  static let limitsLine = Decision(
+    keyword: .hold, verb: "helper engage", fields: [DecisionField(key: "reason", value: "limits")])
+
+  @Test func theEngageEffectCarriesTheConfiguredLimits() {
+    for protection in [true, false] {
+      var driver = HoldDriver()
+      driver.harness.settings.helperBatteryFloorPercent = 25
+      driver.harness.settings.temperatureReleaseCelsius = 45
+      driver.harness.settings.temperatureProtectionEnabled = protection
+      driver.send(.helperFacts(Self.ready), at: -4)
+      driver.send(Self.tick(closed: false), at: -2)
+      driver.send(.transcriptActivity(TranscriptActivity(at: driver.harness.instant(0))), at: 0)
+      let effects = driver.harness.send(Self.tick(closed: true), at: 2)
+      let limits = HelperLimits(batteryFloorPercent: 25, temperatureCeilingCelsius: protection ? 45 : nil)
+      guard case .helper(.engage, let id, _)? = effects.last else {
+        Issue.record("the batch does not end with a helper engage: \(effects)")
+        continue
+      }
+      #expect(effects.last == .helper(.engage, id: id, limits: limits))
+      #expect(driver.harness.state.helper.sentLimits == limits)
+    }
+  }
+
+  @Test(arguments: [true, false], [5, 20, 25])
+  func atOrBelowAConfiguredHelperFloorOnAnyPowerSourceTheHelperIsNotDesired(_ onAC: Bool, _ percent: Int) {
+    var state = Self.desiredState()
+    #expect(HelperIntent.desired(state))
+    _ = HelperIntent.step(
+      &state, event: .power(Self.reading(onAC, percent)), now: Instant(nanoseconds: 0), batch: [],
+      settings: Settings(helperBatteryFloorPercent: 25))
+    let desired = HelperIntent.desired(state)
+    #expect(!desired, Self.configuredFloor)
+  }
+
+  @Test(arguments: [true, false], [26, 50, 100])
+  func aboveAConfiguredHelperFloorTheHelperIsDesired(_ onAC: Bool, _ percent: Int) {
+    var state = Self.desiredState()
+    _ = HelperIntent.step(
+      &state, event: .power(Self.reading(onAC, percent)), now: Instant(nanoseconds: 0), batch: [],
+      settings: Settings(helperBatteryFloorPercent: 25))
+    let desired = HelperIntent.desired(state)
+    #expect(desired, Self.configuredFloor)
+  }
+
+  @Test func withBatteryProtectionOffTheHelperFloorStillStopsTheAsking() {
+    var driver = HoldDriver()
+    driver.harness.settings.batteryProtectionEnabled = false
+    driver.harness.settings.helperBatteryFloorPercent = 25
+    driver.send(.helperFacts(Self.ready), at: -6)
+    driver.send(.power(.battery(percent: 20)), at: -5)
+    driver.send(Self.tick(closed: true), at: -2)
+    driver.send(.transcriptActivity(TranscriptActivity(at: driver.harness.instant(0))), at: 0)
+    for second in stride(from: 2.0, through: 120.0, by: 2.0) {
+      driver.send(Self.tick(closed: true), at: second)
+    }
+    let effects = driver.batches.flatMap { $0 }
+    #expect(Self.helperActions(effects).isEmpty, Self.configuredFloor)
+    #expect(!driver.harness.state.battery.blocked)
+    #expect(driver.harness.state.want.wanted == true)
+    #expect(driver.harness.state.hold.lidClose == .held)
+  }
+
+  @Test func atTheHelperCeilingTheHelperIsNotDesiredUntilFiveDegreesBelow() {
+    var state = Self.desiredState()
+    let settings = Settings(temperatureProtectionEnabled: false)
+    func step(_ reading: BatteryTemperatureReading) {
+      _ = HelperIntent.step(
+        &state, event: .batteryTemperature(reading), now: Instant(nanoseconds: 0), batch: [], settings: settings)
+    }
+    #expect(HelperIntent.desired(state))
+    step(.celsius(59))
+    #expect(HelperIntent.desired(state))
+    step(.celsius(60))
+    #expect(!HelperIntent.desired(state))
+    step(.celsius(56))
+    #expect(!HelperIntent.desired(state))
+    step(.celsius(55))
+    #expect(!HelperIntent.desired(state))
+    step(.celsius(54))
+    #expect(HelperIntent.desired(state))
+    step(.celsius(60))
+    #expect(!HelperIntent.desired(state))
+    step(.unavailable)
+    #expect(HelperIntent.desired(state))
+    step(.celsius(61))
+    #expect(!HelperIntent.desired(state))
+    step(.unreadable)
+    #expect(!HelperIntent.desired(state))
+  }
+
+  @Test func aHotBatteryReleasesAnEngagedHelperWithTheTemperatureReason() throws {
+    var driver = Self.engaged()
+    try #require(driver.harness.state.helper.phase == .engaged)
+    let effects = driver.harness.send(.batteryTemperature(.celsius(45)), at: 5)
+    guard case .helper(.release, let id, _)? = effects.first else {
+      Issue.record("the batch does not start with a helper release: \(effects)")
+      return
+    }
+    #expect(effects.dropFirst().first == .log(Self.releaseLine(.temperature)))
+    #expect(driver.harness.state.helper.phase == .releasing(id))
+  }
+
+  @Test func aChangeOfTheLimitsWhileEngagedSendsThemAgain() throws {
+    var driver = Self.engaged()
+    try #require(driver.harness.state.helper.phase == .engaged)
+    driver.harness.settings.helperBatteryFloorPercent = 25
+    let effects = driver.harness.send(.power(.ac(percent: 80)), at: 5)
+    let limits = HelperLimits(batteryFloorPercent: 25, temperatureCeilingCelsius: 45)
+    guard case .helper(.engage, let id, _)? = effects.last else {
+      Issue.record("the batch does not end with a helper engage: \(effects)")
+      return
+    }
+    #expect(effects.suffix(2) == [.log(Self.limitsLine), .helper(.engage, id: id, limits: limits)])
+    #expect(Self.helperActions(effects) == [.engage])
+    #expect(driver.harness.state.helper.phase == .engaging(id))
+    #expect(driver.harness.state.helper.sentLimits == limits)
+  }
+
+  @Test func unchangedLimitsSendNoSecondEngage() {
+    var driver = Self.engaged()
+    var actions: [HelperAction] = []
+    for second in stride(from: 2.0, through: 60.0, by: 2.0) {
+      actions += Self.helperActions(driver.send(Self.tick(closed: true), at: second))
+    }
+    #expect(!actions.isEmpty)
+    #expect(actions.allSatisfy { $0 == .heartbeat })
   }
 
   @Test func onExternalPowerAtTheHelpersFloorTheAppNeverAsksTheHelperAndKeepsItsOwnHold() {
@@ -358,7 +492,7 @@ struct HelperIntentTests {
   @Test func anEngagedHelperIsReleasedWhenTheChargeOnExternalPowerFallsToTheFloorAndNotAskedAgain() throws {
     var driver = Self.engaged()
     let effects = driver.harness.send(.power(.ac(percent: 10)), at: 5)
-    guard case .helper(.release, let id)? = effects.first else {
+    guard case .helper(.release, let id, _)? = effects.first else {
       Issue.record("the batch does not start with a helper release: \(effects)")
       return
     }
@@ -427,7 +561,7 @@ struct HelperIntentTests {
     let line = DecisionFormatter.line(
       Self.releaseLine(.lidOpen), wall: Date(timeIntervalSince1970: 0), timeZone: TimeZone(secondsFromGMT: 0) ?? .gmt)
     #expect(line.hasSuffix(" HOLD helper release reason=lidOpen"))
-    let reasons = ["lidOpen", "battery", "notWanted", "sleepNow", "stop", "notReady"]
+    let reasons = ["lidOpen", "battery", "notWanted", "sleepNow", "stop", "notReady", "temperature"]
     #expect(HelperReleaseReason.allCases.map(\.rawValue) == reasons)
   }
 
@@ -559,7 +693,7 @@ struct HelperIntentTests {
     var driver = transition.prepare()
     try #require(driver.harness.state.helper.phase == .engaged)
     let effects = driver.harness.send(transition.event, at: transition.at)
-    guard case .helper(.release, let id)? = effects.first else {
+    guard case .helper(.release, let id, _)? = effects.first else {
       Issue.record("the batch does not start with a helper release: \(effects)")
       return
     }
@@ -597,7 +731,7 @@ struct HelperIntentTests {
     let busy = driver.harness.state.busy
     let effects = driver.harness.send(.command(.sleepNow), at: 5)
     try #require(effects.count == 4)
-    guard case .helper(.release, let release) = effects[0], case .requestSleep(let sleep) = effects[3] else {
+    guard case .helper(.release, let release, _) = effects[0], case .requestSleep(let sleep) = effects[3] else {
       Issue.record("expected a helper release first and the sleep request last: \(effects)")
       return
     }
@@ -694,7 +828,7 @@ struct HelperIntentTests {
     }
     #expect(Self.helperActions(quiet).isEmpty)
     let retry = driver.harness.send(Self.tick(closed: true), at: 33)
-    guard case .helper(.engage, let id)? = retry.last else {
+    guard case .helper(.engage, let id, _)? = retry.last else {
       Issue.record("no engage at the retry time: \(retry)")
       return
     }
@@ -718,7 +852,7 @@ struct HelperIntentTests {
   @Test func aFailedEngageThatIsNoLongerWantedIsReleasedInsteadOfRetried() throws {
     var (driver, _) = try Self.engageFailed(.timedOut)
     let opened = driver.harness.send(Self.lidOpened, at: 10)
-    guard case .helper(.release, let id)? = opened.first else {
+    guard case .helper(.release, let id, _)? = opened.first else {
       Issue.record("the batch does not start with a helper release: \(opened)")
       return
     }

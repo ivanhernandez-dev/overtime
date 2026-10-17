@@ -15,6 +15,7 @@ public enum HelperReleaseReason: String, Sendable, Equatable, CaseIterable {
   case sleepNow
   case stop
   case notReady
+  case temperature
 }
 
 public struct HelperIntentState: Sendable, Equatable {
@@ -25,11 +26,13 @@ public struct HelperIntentState: Sendable, Equatable {
   public var heartbeat: EffectID?
   public var sleepRequest: EffectID?
   public var atOrBelowHelperFloor: Bool
+  public var atOrAboveHelperCeiling: Bool
+  public var sentLimits: HelperLimits?
 
   public init(
     facts: HelperFacts? = nil, phase: HelperPhase = .idle, lastContact: Instant? = nil,
     suppressedUntilWake: Bool = false, heartbeat: EffectID? = nil, sleepRequest: EffectID? = nil,
-    atOrBelowHelperFloor: Bool = false
+    atOrBelowHelperFloor: Bool = false, atOrAboveHelperCeiling: Bool = false, sentLimits: HelperLimits? = nil
   ) {
     self.facts = facts
     self.phase = phase
@@ -38,34 +41,41 @@ public struct HelperIntentState: Sendable, Equatable {
     self.heartbeat = heartbeat
     self.sleepRequest = sleepRequest
     self.atOrBelowHelperFloor = atOrBelowHelperFloor
+    self.atOrAboveHelperCeiling = atOrAboveHelperCeiling
+    self.sentLimits = sentLimits
   }
 }
 
 public enum HelperIntent {
   public static let heartbeatSeconds: Double = 20
   public static let retrySeconds: Double = 30
-  public static let helperBatteryFloorPercent = 10
+  public static let helperTemperatureCeilingCelsius = 60
 
   public static func desired(_ state: AppState) -> Bool {
     state.want.wanted == true && lidClosed(state) && !state.battery.blocked && state.helper.facts?.ready == true
       && !state.hold.stopping && !state.helper.suppressedUntilWake && !state.helper.atOrBelowHelperFloor
+      && !state.temperature.blocked && !state.helper.atOrAboveHelperCeiling
   }
 
   public static func step(
-    _ state: inout AppState, event: Event, now: Instant, batch: [Effect]
+    _ state: inout AppState, event: Event, now: Instant, batch: [Effect], settings: Settings = Settings()
   ) -> (before: [Effect], after: [Effect]) {
     noteSleep(&state, event: event, batch: batch)
-    notePower(&state, event: event)
+    notePower(&state, event: event, settings: settings)
+    noteTemperature(&state, event: event, settings: settings)
     let wanted = desired(state)
     switch state.helper.phase {
     case .idle:
       guard wanted, state.lastFullWake == true else { return ([], []) }
-      return ([], engage(&state))
+      return ([], engage(&state, settings: settings))
     case .engaging:
       guard !wanted else { return ([], []) }
       return (release(&state), [])
     case .engaged:
       guard wanted else { return (release(&state), []) }
+      if state.helper.sentLimits != HelperLimits(settings: settings) {
+        return ([], engage(&state, settings: settings, reason: "limits"))
+      }
       guard isTick(event), heartbeatDue(state.helper, now: now) else { return ([], []) }
       let id = Hold.allocate(&state)
       state.helper.heartbeat = id
@@ -74,7 +84,7 @@ public enum HelperIntent {
     case .failed(let retryAt):
       guard wanted else { return (release(&state), []) }
       guard isTick(event), now >= retryAt, state.lastFullWake == true else { return ([], []) }
-      return ([], engage(&state))
+      return ([], engage(&state, settings: settings))
     case .releasing:
       return ([], [])
     }
@@ -149,17 +159,34 @@ public enum HelperIntent {
     }
   }
 
-  static func notePower(_ state: inout AppState, event: Event) {
+  static func notePower(_ state: inout AppState, event: Event, settings: Settings) {
     guard case .power(let reading) = event else { return }
-    state.helper.atOrBelowHelperFloor = atOrBelowHelperFloor(reading)
+    state.helper.atOrBelowHelperFloor = atOrBelowHelperFloor(reading, floor: settings.helperBatteryFloorPercent)
   }
 
-  static func atOrBelowHelperFloor(_ reading: PowerReading) -> Bool {
+  static func atOrBelowHelperFloor(_ reading: PowerReading, floor: Int) -> Bool {
     switch reading {
     case .ac(let percent?), .battery(let percent?):
-      percent <= helperBatteryFloorPercent
+      percent <= floor
     case .ac(nil), .battery(nil), .noBattery:
       false
+    }
+  }
+
+  static func noteTemperature(_ state: inout AppState, event: Event, settings: Settings) {
+    guard case .batteryTemperature(let reading) = event else { return }
+    let ceiling = HelperLimits(settings: settings).temperatureCeilingCelsius ?? helperTemperatureCeilingCelsius
+    switch reading {
+    case .celsius(let celsius):
+      if celsius >= ceiling {
+        state.helper.atOrAboveHelperCeiling = true
+      } else if celsius < ceiling - Settings.temperatureResumeHysteresisCelsius {
+        state.helper.atOrAboveHelperCeiling = false
+      }
+    case .unavailable:
+      state.helper.atOrAboveHelperCeiling = false
+    case .unreadable:
+      break
     }
   }
 
@@ -175,14 +202,20 @@ public enum HelperIntent {
     if state.helper.suppressedUntilWake { return .sleepNow }
     if state.helper.facts?.ready != true { return .notReady }
     if state.battery.blocked || state.helper.atOrBelowHelperFloor { return .battery }
+    if state.temperature.blocked || state.helper.atOrAboveHelperCeiling { return .temperature }
     if !lidClosed(state) { return .lidOpen }
     return .notWanted
   }
 
-  static func engage(_ state: inout AppState) -> [Effect] {
+  static func engage(_ state: inout AppState, settings: Settings, reason: String? = nil) -> [Effect] {
     let id = Hold.allocate(&state)
+    let limits = HelperLimits(settings: settings)
     state.helper.phase = .engaging(id)
-    return [.log(Decision(keyword: .hold, verb: "helper engage")), .helper(.engage, id: id)]
+    state.helper.sentLimits = limits
+    let fields = reason.map { [DecisionField(key: "reason", value: $0)] } ?? []
+    return [
+      .log(Decision(keyword: .hold, verb: "helper engage", fields: fields)), .helper(.engage, id: id, limits: limits),
+    ]
   }
 
   static func release(_ state: inout AppState) -> [Effect] {

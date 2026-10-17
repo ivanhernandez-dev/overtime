@@ -392,7 +392,7 @@ struct EngineHelperTests {
 
   @Test func theAppStopsAskingTheHelperAtTheHelpersOwnBatteryFloor() {
     #expect(
-      HelperIntent.helperBatteryFloorPercent == HelperMachine.batteryFloorPercent,
+      Settings().helperBatteryFloorPercent == HelperMachine.batteryFloorPercent,
       "the app's intent treats a charge at or below the helper's floor as not ready, so the two must match")
   }
 
