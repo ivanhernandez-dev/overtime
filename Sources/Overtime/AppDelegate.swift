@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private var onboardingPresenter: OnboardingPresenter?
   private var notificationAdapter: UserNotificationsAdapter?
   private var notificationCoordinator: NotificationCoordinator?
+  private(set) var automation: AutomationResponder?
   private var selfTestRecorder: SelfTestRecorder?
   private var helperMonitor: HelperMonitor?
   private(set) var helperPane: HelperPaneModel?
@@ -239,6 +240,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   func applicationWillFinishLaunching(_ notification: Notification) {
+    installAutomation(for: AppMode.current)
     guard case .live = AppMode.current else { return }
     let adapter = UserNotificationsAdapter()
     adapter.responder = NotificationResponder(
@@ -246,6 +248,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       onOpenSettings: { [weak self] pane in self?.showSettings(pane: pane) })
     adapter.attach()
     notificationAdapter = adapter
+  }
+
+  static func awaitsEngine(for mode: AppMode) -> Bool {
+    if case .live = mode { return true }
+    return false
+  }
+
+  private func installAutomation(for mode: AppMode) {
+    guard !mode.isTestHost, automation == nil else { return }
+    automation = AutomationResponder(
+      model: model, awaitingEngine: Self.awaitsEngine(for: mode),
+      log: { [weak self] decision in Self.logAutomation(decision, host: self?.appHost) })
+    NSAppleEventManager.shared().setEventHandler(
+      self, andSelector: #selector(handleGetURLEvent(_:withReplyEvent:)),
+      forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL))
+  }
+
+  @objc private func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent reply: NSAppleEventDescriptor) {
+    let text = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue ?? ""
+    automation?.enqueue(text)
   }
 
   private func startNotifications(engineHost: LiveEngineHost, host: AppHost) {
@@ -495,6 +517,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       switch await start.value {
       case .running(let engineHost):
         model.bind(to: engineHost)
+        automation?.engineStarted()
         syncSettingsHost()
         startNotifications(engineHost: engineHost, host: host)
         Self.openOnboardingAtLaunch(
@@ -505,6 +528,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         helperMonitor?.start(host: engineHost)
       case .blocked(let failure):
         model.hostFailure = failure
+        automation?.engineFailed()
       }
     }
   }
@@ -537,6 +561,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     } else {
       let line = DecisionFormatter.line(decision, wall: Date(), timeZone: .current)
       settingsLogger.error("\(line, privacy: .public)")
+    }
+  }
+
+  nonisolated private static let automationLogger = Logger(subsystem: FileLogger.logSubsystem, category: "automation")
+
+  nonisolated private static func logAutomation(_ decision: Decision, host: AppHost?) {
+    if let running = host?.runningHost {
+      running.engine.logImmediately(decision)
+    } else {
+      let line = DecisionFormatter.line(decision, wall: Date(), timeZone: .current)
+      automationLogger.notice("\(line, privacy: .public)")
     }
   }
 
