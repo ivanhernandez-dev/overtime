@@ -66,6 +66,7 @@ public enum DurationLabel {
 public enum ControlAction: Sendable, Equatable {
   case pause(PauseChoice)
   case keepAwake(KeepAwakeChoice)
+  case keepAwakeUntil(Date)
   case releaseUntilIdle
   case resume
   case stopKeepingAwake
@@ -93,10 +94,13 @@ public enum ControlMapping {
     case .pause(.untilResumed): .pause(.indefinite)
     case .keepAwake(.timed(let minutes)): .force(.forSeconds(Double(minutes) * 60))
     case .keepAwake(.untilStopped): .force(.indefinite)
+    case .keepAwakeUntil(let date): .force(.forSeconds(max(date.timeIntervalSince(now), minimumSeconds)))
     case .releaseUntilIdle: .releaseUntilIdle
     case .resume, .stopKeepingAwake: .resume
     }
   }
+
+  static let minimumSeconds: Double = 1
 
   public static func nextLocalMidnight(after date: Date, calendar: Calendar) -> Date {
     if let midnight = calendar.nextDate(
@@ -117,7 +121,7 @@ public enum ControlFeedback {
   public static func failureCopy(for action: ControlAction) -> String {
     switch action {
     case .pause: "Couldn't pause. Try again."
-    case .keepAwake: "Couldn't turn on \(ControlMapping.keepAwakeLabel). Try again."
+    case .keepAwake, .keepAwakeUntil: "Couldn't turn on \(ControlMapping.keepAwakeLabel). Try again."
     case .resume: "Couldn't resume. Try again."
     case .stopKeepingAwake: "Couldn't stop keeping awake. Try again."
     case .releaseUntilIdle: "Couldn't release the hold. Try again."
