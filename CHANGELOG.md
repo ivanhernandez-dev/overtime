@@ -8,6 +8,7 @@ All notable changes to Overtime are listed here, in the Keep a Changelog format,
 
 - Keep awake with the lid closed, in Settings > General: Always, as before, Only on power adapter, or Never. With Only on power adapter, the Mac sleeps when you close the lid on battery or unplug the charger with the lid closed. With Never, closing the lid always lets the Mac sleep, and Overtime still prevents idle sleep with the lid open.
 - You can change the two timed choices of the panel's Pause and Keep Awake menus in Settings > General, from 1 minute to 24 hours. They stay 15 Minutes and 1 Hour, and 30 Minutes and 2 Hours, until you change them.
+- Keep Awake from scripts and scheduled jobs: `open -g "overtime://keep-awake?minutes=90"`, `?until=05:30`, no parameter for until stopped, and `overtime://stop-keep-awake`. A link works like the Keep Awake control in the panel, with the same battery and lid-closed limits, and opens no window. See Automation in the README.
 
 ## [1.0.2] - 2026-10-17
 
