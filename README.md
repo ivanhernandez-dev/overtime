@@ -137,6 +137,54 @@ Settings has seven panes, in this order:
   <img src="docs/images/settings-general-dark.png" width="780" alt="Overtime Settings on the General pane, selected in the sidebar, with Launch at login on, Keep awake with the lid closed set to Always, Keep display on while Claude works off, and the Pause and Keep Awake section with the Pause choices at 15 and 60 minutes">
 </p>
 
+## Automation
+
+Scripts and scheduled jobs can turn Keep Awake on and off with an `overtime://` link. A link does exactly what the Keep Awake control in the panel does: it still lets go at the battery limit, with the lid closed it follows "Keep awake with the lid closed", and the Keep Awake reminder still applies. Open it with `open -g`, which leaves Overtime in the background: it opens no window and doesn't take focus.
+
+| Link | What it does |
+|---|---|
+| `overtime://keep-awake` | Keeps the Mac awake until stopped. |
+| `overtime://keep-awake?minutes=N` | Keeps the Mac awake for N minutes, from 1 to 1440. |
+| `overtime://keep-awake?until=HH:MM` | Keeps the Mac awake until that time, on the 24-hour clock in your time zone. A time that has already passed today means tomorrow. |
+| `overtime://stop-keep-awake` | Stops keeping the Mac awake. It does nothing unless Keep Awake is on, so it never ends a pause. |
+
+```sh
+open -g "overtime://keep-awake?until=05:30"
+open -g "overtime://stop-keep-awake"
+```
+
+As in the panel, turning Keep Awake on ends a pause, and a new keep-awake link replaces the one that is on. If Overtime isn't running, the link opens it, and the command runs once Overtime is ready. A link with a mistake, such as `minutes=0` or an unknown parameter, changes nothing. The decision log, `~/Library/Logs/Overtime/overtimed.log`, has a `url` line for each link, with the reason when it was ignored.
+
+This is how to keep the Mac awake for scheduled `claude -p` runs, which Overtime ignores by default (see Ignored entrypoints in Settings > Detection). A launch agent can turn Keep Awake on every evening before the first run, for example at 20:55 until 05:30. Save this as `~/Library/LaunchAgents/com.example.overtime-overnight.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.example.overtime-overnight</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/open</string>
+    <string>-g</string>
+    <string>overtime://keep-awake?until=05:30</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>20</integer>
+    <key>Minute</key>
+    <integer>55</integer>
+  </dict>
+</dict>
+</plist>
+```
+
+Then load it with `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.example.overtime-overnight.plist`. launchd doesn't wake a sleeping Mac for a job: a job missed while the Mac slept runs when it wakes. So schedule the link while the Mac is still awake, or put the `open -g` command at the start of the script your first job runs.
+
+Any app on your Mac can open these links, and so can a web page once your browser asks you. The most a link can do is what the panel's Keep Awake does, with the same limits.
+
 ## How it works
 
 - **Detect.** Claude Code counts as working while a Claude session in a terminal keeps its own `caffeinate` running, or while a transcript under `~/.claude/projects` (subagents included) was written in the last 2 minutes. A Claude Code session that sets its own CLAUDE_CONFIG_DIR is watched automatically while it runs, and you can add folders in Settings > Detection. Transcripts whose entrypoint is on the ignored list (by default `sdk-*`, which covers `claude -p` and Agent SDK automations) don't count, and neither do background tasks or `/loop` wake-ups. There are no hooks and no AI: only system state.
@@ -237,7 +285,7 @@ Without Unplug Protection, a closed Mac can sleep when you plug the charger back
 <details>
 <summary>Overtime doesn't notice Claude Code</summary>
 
-Open Settings > Diagnostics: Detection health lists transcript folders that are missing or can't be read. Settings > Detection marks such a folder with a warning sign, and you can add folders there. Overtime always watches `~/.claude/projects`, and a Claude Code session that sets its own CLAUDE_CONFIG_DIR is watched while it runs. `claude -p` and Agent SDK scripts are ignored on purpose; you can change that under Ignored entrypoints in Settings > Detection.
+Open Settings > Diagnostics: Detection health lists transcript folders that are missing or can't be read. Settings > Detection marks such a folder with a warning sign, and you can add folders there. Overtime always watches `~/.claude/projects`, and a Claude Code session that sets its own CLAUDE_CONFIG_DIR is watched while it runs. `claude -p` and Agent SDK scripts are ignored on purpose; you can change that under Ignored entrypoints in Settings > Detection. To keep the Mac awake while they run, turn on Keep Awake from the script: see [Automation](#automation).
 
 </details>
 
