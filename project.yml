@@ -68,6 +68,10 @@ targets:
         LSMinimumSystemVersion: "14.0"
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleURLTypes:
+          - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
+            CFBundleURLSchemes:
+              - $(OVERTIME_URL_SCHEME)
         NSLocationUsageDescription: "Since macOS 14.4, apps can see the names of nearby Wi-Fi networks only with Location access. Overtime uses it only to find and join your iPhone hotspot when the network stops working with the lid closed. It never reads where you are, and never stores or sends your location."
         NSLocationWhenInUseUsageDescription: "Since macOS 14.4, apps can see the names of nearby Wi-Fi networks only with Location access. Overtime uses it only to find and join your iPhone hotspot when the network stops working with the lid closed. It never reads where you are, and never stores or sends your location."
         SUFeedURL: https://github.com/ivanhernandez-dev/overtime/releases/latest/download/appcast.xml
@@ -96,9 +100,11 @@ targets:
       configs:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: io.github.ivanhernandez-dev.overtime.dev
+          OVERTIME_URL_SCHEME: overtime-dev
           EXCLUDED_SOURCE_FILE_NAMES: io.github.ivanhernandez-dev.overtime.helper.plist
         Release:
           PRODUCT_BUNDLE_IDENTIFIER: io.github.ivanhernandez-dev.overtime
+          OVERTIME_URL_SCHEME: overtime
           EXCLUDED_SOURCE_FILE_NAMES: io.github.ivanhernandez-dev.overtime.dev.helper.plist
           CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
   overtime-sentinel:
