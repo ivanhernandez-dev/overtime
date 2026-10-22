@@ -1,8 +1,9 @@
 # 0026. Keep Awake can be turned on and off with an overtime:// link
 
-- **Status:** Proposed
+- **Status:** Accepted
+- **Accepted:** 2026-10-22. The project author accepted the four links as proposed, including `overtime://keep-awake` with no limit, which any app, or a web page once the browser asks, can open. Checked on a Mac with a signed release build: `open -g` with `minutes`, `until`, a mistyped parameter and `stop-keep-awake` behaved as described and took no focus, and a link opened while Overtime was not running started it and ran once the engine was ready. `open -g` from a launchd job was not run.
 - **Date:** 2026-10-21
-- **Deciders:** Project author (pending)
+- **Deciders:** Project author
 - **Related ADRs:** [0005](0005-sentinel-watchdog-design.md), [0017](0017-ignored-entrypoints-sdk-prefix.md), [0021](0021-app-owned-status-item-and-panel.md), [0025](0025-lid-closed-keep-awake-setting-and-custom-durations.md)
 
 ## Context
@@ -38,3 +39,4 @@ The app already has an external surface: the engine's control socket, which `ove
 ## Not verified
 
 - No run of the built app: this change was written on a machine without Xcode. The package code and its tests were compiled and run there with `swiftc`, and the app target was type-checked with its Swift 6 and `MainActor` default isolation settings, but the URL registration, the Apple event handler and `open -g` from launchd need a run on a Mac with the release build.
+- Since then (2026-10-22): the full CI gate passed with Xcode (core, runtime, app tests, script tests, strict lint, helper pin), and a signed release build checked the URL registration and the Apple event handler while running and at launch. Only `open -g` from a launchd job is still unverified.
