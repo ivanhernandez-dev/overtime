@@ -447,4 +447,65 @@ struct EngineSnapshotTests {
     #expect(await recorder.wait { $0.last?.force == .indefinite })
     #expect(recorder.snapshots.dropFirst(before).allSatisfy { $0.force == .indefinite })
   }
+
+  @Test func aWaitingSessionIsPublishedOnceAcrossTicks() async throws {
+    let harness = try Harness()
+    let reader = SessionReader(readDirectory: { _ in "/Users/dev/alpha" }, readTerminal: { _ in "ttys009" })
+    let records = [
+      ProcessRecord(
+        pid: 40, ppid: 1, uid: getuid(), comm: "claude", ttyDevice: 0x1000_0009,
+        startMono: Instant(nanoseconds: 5_000_000_000), argv0: "claude")
+    ]
+    let work = LongRunningWork(waitingSessionPIDs: [40])
+    let clock = harness.clock
+    let latest = OSAllocatedUnfairLock<[SessionSummary]>(initialState: [])
+    let engine = harness.engine(
+      sources: EngineSources(
+        transcriptSeed: { [] },
+        sampleTick: {
+          let sessions = reader.sessions(from: records, at: clock.mono(), work: work)
+          latest.withLock { $0 = sessions }
+          return TickFacts(agents: .none)
+        },
+        sessions: { latest.withLock { $0 } }))
+    let recorder = SnapshotRecorder(await engine.snapshots())
+    defer { recorder.cancel() }
+    #expect(await recorder.wait { !$0.isEmpty })
+    let firstTick = clock.mono()
+    await engine.tick()
+    let published = await engine.currentSnapshot()
+    #expect(published.sessions.first?.waitingSince == firstTick)
+    #expect(await recorder.wait { $0.last == published })
+    let before = recorder.snapshots.count
+    for _ in 0..<9 {
+      clock.advance(seconds: 2)
+      await engine.tick()
+      #expect(await engine.currentSnapshot() == published)
+    }
+    _ = await engine.handle(.force(.indefinite))
+    #expect(await recorder.wait { $0.last?.force == .indefinite })
+    #expect(recorder.snapshots.dropFirst(before).allSatisfy { $0.force == .indefinite })
+    #expect(recorder.snapshots.filter { $0.sessions.first?.isWaiting == true }.count >= 1)
+  }
+
+  @Test func theSnapshotCarriesTheLongRunningSettingsAndHolding() {
+    var state = AppState(mode: .shadow)
+    let quiet = EngineSnapshot(state: state, settings: Settings())
+    #expect(quiet.backgroundCommandsKeepAwake)
+    #expect(quiet.printRunsKeepAwake)
+    #expect(quiet.longRunningLimitMinutes == nil)
+    #expect(!quiet.backgroundCommandsHolding)
+    #expect(!quiet.printRunsHolding)
+    state.busy.backgroundHolding = true
+    state.busy.printHolding = true
+    let settings = Settings(
+      backgroundCommandsKeepAwake: false, printRunsKeepAwake: false, longRunningLimitEnabled: true,
+      longRunningLimitMinutes: 120)
+    let holding = EngineSnapshot(state: state, settings: settings)
+    #expect(!holding.backgroundCommandsKeepAwake)
+    #expect(!holding.printRunsKeepAwake)
+    #expect(holding.longRunningLimitMinutes == 120)
+    #expect(holding.backgroundCommandsHolding)
+    #expect(holding.printRunsHolding)
+  }
 }

@@ -134,6 +134,11 @@ public struct EngineSnapshot: Sendable, Equatable {
   public var pauseSecondMinutes: Int
   public var keepAwakeFirstMinutes: Int
   public var keepAwakeSecondMinutes: Int
+  public var backgroundCommandsKeepAwake: Bool
+  public var printRunsKeepAwake: Bool
+  public var longRunningLimitMinutes: Int?
+  public var backgroundCommandsHolding: Bool
+  public var printRunsHolding: Bool
 
   public var busyEndedAt: Instant? {
     events.busyEndedAt
@@ -183,8 +188,18 @@ public struct EngineSnapshot: Sendable, Equatable {
     pauseFirstMinutes: Int = Settings().pauseFirstMinutes,
     pauseSecondMinutes: Int = Settings().pauseSecondMinutes,
     keepAwakeFirstMinutes: Int = Settings().keepAwakeFirstMinutes,
-    keepAwakeSecondMinutes: Int = Settings().keepAwakeSecondMinutes
+    keepAwakeSecondMinutes: Int = Settings().keepAwakeSecondMinutes,
+    backgroundCommandsKeepAwake: Bool = Settings().backgroundCommandsKeepAwake,
+    printRunsKeepAwake: Bool = Settings().printRunsKeepAwake,
+    longRunningLimitMinutes: Int? = nil,
+    backgroundCommandsHolding: Bool = false,
+    printRunsHolding: Bool = false
   ) {
+    self.backgroundCommandsKeepAwake = backgroundCommandsKeepAwake
+    self.printRunsKeepAwake = printRunsKeepAwake
+    self.longRunningLimitMinutes = longRunningLimitMinutes
+    self.backgroundCommandsHolding = backgroundCommandsHolding
+    self.printRunsHolding = printRunsHolding
     self.lidClosedKeepAwake = lidClosedKeepAwake
     self.lidClosedHoldAllowed = lidClosedHoldAllowed
     self.pauseFirstMinutes = pauseFirstMinutes
@@ -280,7 +295,12 @@ public struct EngineSnapshot: Sendable, Equatable {
       pauseFirstMinutes: settings.pauseFirstMinutes,
       pauseSecondMinutes: settings.pauseSecondMinutes,
       keepAwakeFirstMinutes: settings.keepAwakeFirstMinutes,
-      keepAwakeSecondMinutes: settings.keepAwakeSecondMinutes
+      keepAwakeSecondMinutes: settings.keepAwakeSecondMinutes,
+      backgroundCommandsKeepAwake: settings.backgroundCommandsKeepAwake,
+      printRunsKeepAwake: settings.printRunsKeepAwake,
+      longRunningLimitMinutes: settings.longRunningLimitEnabled ? settings.longRunningLimitMinutes : nil,
+      backgroundCommandsHolding: state.busy.backgroundHolding,
+      printRunsHolding: state.busy.printHolding
     )
   }
 

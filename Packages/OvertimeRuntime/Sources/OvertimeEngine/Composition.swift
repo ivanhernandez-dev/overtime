@@ -209,7 +209,8 @@ public enum Composition {
     let scanner = TranscriptScanner(roots: roots.map(\.path), headers: headers)
     let userID = getuid()
     let processScanner = ProcessScanner(userID: userID)
-    let detectors: [any AgentDetector] = [ClaudeCodeDetector(userID: userID)]
+    let claude = ClaudeCodeDetector(userID: userID)
+    let detectors: [any AgentDetector] = [claude]
     let powerMonitor = PowerSourceMonitor()
     let registry = RegistryReader()
     let displayCount: @Sendable () -> Int? = externalDisplays ?? { registry.externalDisplayCount() }
@@ -249,12 +250,14 @@ public enum Composition {
       sampleTick: {
         let processes = processScanner.sample(clock: clock, extraCandidates: [])
         latestProcesses.withLock { $0 = processes }
-        let sessions = sessionReader.sessions(from: processes, at: clock.mono())
+        let now = clock.mono()
+        let tick = tickAgents(from: processes, detectors: detectors, claude: claude, now: now)
+        let sessions = sessionReader.sessions(from: processes, at: now, work: tick.work)
         latestSessions.withLock { $0 = sessions }
         let lidClosed = registry.lidClosed()
         let closed = lidClosed == true
         return TickFacts(
-          agents: .merged(detectors.map { $0.signals(from: processes) }), lidClosed: lidClosed,
+          agents: tick.agents, lidClosed: lidClosed,
           externalDisplays: closed ? displayCount() : nil,
           fullWake: RegistryReader.isFullWake(capabilities: registry.systemCapabilities()),
           hidIdleSeconds: closed ? registry.hidIdleSeconds() : nil, network: networkFacts?(lidClosed))
@@ -284,6 +287,13 @@ public enum Composition {
     return Engine(
       mode: mode, settings: settings, clock: clock, interpreter: interpreter, sources: sources, heartbeat: heartbeat,
       closeSentinel: closeSentinel, stopWaitSeconds: stopWaitSeconds)
+  }
+
+  static func tickAgents(
+    from processes: [ProcessRecord], detectors: [any AgentDetector], claude: ClaudeCodeDetector, now: Instant
+  ) -> (agents: AgentSignals, work: LongRunningWork) {
+    let work = claude.longRunningWork(in: processes, now: now)
+    return (AgentSignals.merged(detectors.map { $0.signals(from: processes) }).including(work), work)
   }
 
   static func makeTranscriptSource(

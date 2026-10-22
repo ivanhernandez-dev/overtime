@@ -440,6 +440,31 @@ struct EngineApplySettingsTests {
     #expect(line[decision...] == "applied keys=batteryLowPercent,batteryResumePercent")
   }
 
+  @Test func theLongRunningKeysAreNamedInTheAppliedLine() async throws {
+    let harness = try Harness()
+    let engine = try harness.engine()
+    await engine.step(.tick(TickFacts(fullWake: true)))
+    var candidate = harness.settings
+    candidate.backgroundCommandsKeepAwake = false
+    candidate.printRunsKeepAwake = false
+    candidate.longRunningLimitEnabled = true
+    candidate.longRunningLimitMinutes = 45
+    candidate.keepDisplayOn = true
+    #expect(await engine.apply(settings: candidate))
+    let lines = harness.settingsLines()
+    #expect(lines.count == 1)
+    let line = try #require(lines.first)
+    let decision = try #require(line.range(of: " SETTINGS ")).upperBound
+    let expected =
+      "applied keys=backgroundCommandsKeepAwake,keepDisplayOn,longRunningLimitEnabled,longRunningLimitMinutes,"
+      + "printRunsKeepAwake"
+    #expect(String(line[decision...]) == expected)
+    let snapshot = await engine.currentSnapshot()
+    #expect(!snapshot.backgroundCommandsKeepAwake)
+    #expect(!snapshot.printRunsKeepAwake)
+    #expect(snapshot.longRunningLimitMinutes == 45)
+  }
+
   @Test func aSettingsLineNeverCarriesAFolderEntrypointOrNetworkName() async throws {
     let harness = try Harness()
     let engine = try harness.engine()

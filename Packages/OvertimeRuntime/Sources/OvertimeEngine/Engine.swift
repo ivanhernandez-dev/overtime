@@ -745,6 +745,12 @@ public actor Engine {
     if old.pauseSecondMinutes != new.pauseSecondMinutes { keys.append("pauseSecondMinutes") }
     if old.keepAwakeFirstMinutes != new.keepAwakeFirstMinutes { keys.append("keepAwakeFirstMinutes") }
     if old.keepAwakeSecondMinutes != new.keepAwakeSecondMinutes { keys.append("keepAwakeSecondMinutes") }
+    if old.backgroundCommandsKeepAwake != new.backgroundCommandsKeepAwake {
+      keys.append("backgroundCommandsKeepAwake")
+    }
+    if old.printRunsKeepAwake != new.printRunsKeepAwake { keys.append("printRunsKeepAwake") }
+    if old.longRunningLimitEnabled != new.longRunningLimitEnabled { keys.append("longRunningLimitEnabled") }
+    if old.longRunningLimitMinutes != new.longRunningLimitMinutes { keys.append("longRunningLimitMinutes") }
     return keys.sorted()
   }
 

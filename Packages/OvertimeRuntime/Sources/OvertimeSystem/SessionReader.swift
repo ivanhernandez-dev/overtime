@@ -9,17 +9,30 @@ public struct SessionSummary: Sendable, Equatable {
   public var ttyName: String?
   public var startMono: Instant?
   public var workingSince: Instant?
+  public var waitingSince: Instant?
+  public var printRun: Bool
+  public var terminal: Bool
 
-  public init(pid: Int32, cwd: String?, ttyName: String?, startMono: Instant?, workingSince: Instant? = nil) {
+  public init(
+    pid: Int32, cwd: String?, ttyName: String?, startMono: Instant?, workingSince: Instant? = nil,
+    waitingSince: Instant? = nil, printRun: Bool = false, terminal: Bool = true
+  ) {
     self.pid = pid
     self.cwd = cwd
     self.ttyName = ttyName
     self.startMono = startMono
     self.workingSince = workingSince
+    self.waitingSince = waitingSince
+    self.printRun = printRun
+    self.terminal = terminal
   }
 
   public var isWorking: Bool {
     workingSince != nil
+  }
+
+  public var isWaiting: Bool {
+    waitingSince != nil
   }
 }
 
@@ -34,6 +47,7 @@ public final class SessionReader: Sendable {
   private let readTerminal: @Sendable (UInt32) -> String?
   private let entries = OSAllocatedUnfairLock(initialState: [Int32: Entry]())
   private let activity = OSAllocatedUnfairLock(initialState: SessionActivity())
+  private let waiting = OSAllocatedUnfairLock(initialState: SessionActivity())
 
   public init(
     readDirectory: @escaping @Sendable (Int32) -> String? = SessionReader.currentDirectory,
@@ -51,26 +65,39 @@ public final class SessionReader: Sendable {
       pid: record.pid,
       cwd: readDirectory(record.pid),
       ttyName: record.hasControllingTerminal ? readTerminal(record.ttyDevice) : nil,
-      startMono: record.startMono
+      startMono: record.startMono,
+      terminal: record.hasControllingTerminal
     )
     entries.withLock { $0[record.pid] = Entry(summary: summary) }
     return summary
   }
 
-  public func sessions(from records: [ProcessRecord], at now: Instant) -> [SessionSummary] {
-    let terminal = records.filter { $0.hasControllingTerminal && ClaudeCodeDetector.isClaude($0) }
-    let live = Set(terminal.map(\.pid))
+  public func sessions(
+    from records: [ProcessRecord], at now: Instant, work: LongRunningWork = LongRunningWork()
+  ) -> [SessionSummary] {
+    let listed = records.filter { record in
+      guard ClaudeCodeDetector.isClaude(record) else { return false }
+      return record.hasControllingTerminal || work.waitingSessionPIDs.contains(record.pid)
+        || work.printRunStarts[record.pid] != nil
+    }
+    let live = Set(listed.map(\.pid))
     entries.withLock { entries in
       entries = entries.filter { live.contains($0.key) }
     }
-    let summaries = terminal.map(summary(for:)).sorted(by: Self.olderFirst)
+    let summaries = listed.map(summary(for:)).sorted(by: Self.olderFirst)
     let busy = ClaudeCodeDetector.busySessionPIDs(in: records)
     let keys = summaries.map { SessionActivity.Session(pid: $0.pid, start: $0.startMono) }
     let since = activity.withLock { $0.update(sessions: keys, busyPIDs: busy, at: now) }
+    let waitingSince = waiting.withLock {
+      $0.update(
+        sessions: keys, busyPIDs: work.waitingSessionPIDs, at: now, graceSeconds: Timing.sessionWaitingGraceSeconds)
+    }
     return summaries.map { summary in
-      var working = summary
-      working.workingSince = since[summary.pid]
-      return working
+      var session = summary
+      session.workingSince = since[summary.pid]
+      session.waitingSince = waitingSince[summary.pid]
+      session.printRun = work.printRunStarts[summary.pid] != nil
+      return session
     }
   }
 
