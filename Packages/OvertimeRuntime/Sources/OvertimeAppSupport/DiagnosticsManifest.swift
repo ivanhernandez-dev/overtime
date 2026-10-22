@@ -120,6 +120,22 @@ public enum DiagnosticsManifest {
       var cwd: String?
       var tty: String?
       var start: UInt64?
+      var waiting: Bool
+      var printRun: Bool
+      var terminal: Bool
+    }
+
+    struct NullableMinutes: Encodable {
+      var value: Int?
+
+      func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        if let value {
+          try container.encode(value)
+        } else {
+          try container.encodeNil()
+        }
+      }
     }
 
     var mode: String
@@ -155,6 +171,11 @@ public enum DiagnosticsManifest {
     var batteryTemperature: String?
     var lidClosedKeepAwake: String
     var lidClosedHoldAllowed: Bool
+    var backgroundCommandsKeepAwake: Bool
+    var printRunsKeepAwake: Bool
+    var longRunningLimitMinutes: NullableMinutes
+    var backgroundCommandsHolding: Bool
+    var printRunsHolding: Bool
   }
 
   public static let snapshotFile = "snapshot.json"
@@ -182,8 +203,8 @@ public enum DiagnosticsManifest {
       unplug protection if it is installed.
     - snapshot.json: what Overtime knew when the archive was made. For each
       Claude Code session it lists the process ID, the working folder, the
-      terminal and the start time. It holds no command lines and no transcript
-      content.
+      terminal, the start time, and whether it is a claude -p run or is waiting
+      on a command. It holds no command lines and no transcript content.
     - self-test.json, status.txt and detection-health.txt: the last self-test
       result, the app and macOS versions, the Mac model, the login item, the
       state of unplug protection, and any problem Overtime had finding Claude
@@ -341,14 +362,20 @@ public enum DiagnosticsManifest {
         current: facts?.current, owns: facts?.owns, sleepDisabled: facts?.sleepDisabled),
       network: snapshot.network.map(export),
       sessions: snapshot.sessions.map {
-        SnapshotExport.Session(pid: $0.pid, cwd: $0.cwd, tty: $0.ttyName, start: $0.startMono?.nanoseconds)
+        SnapshotExport.Session(
+          pid: $0.pid, cwd: $0.cwd, tty: $0.ttyName, start: $0.startMono?.nanoseconds, waiting: $0.isWaiting,
+          printRun: $0.printRun, terminal: $0.terminal)
       },
       batteryProtectionEnabled: snapshot.batteryProtectionEnabled,
       helperBatteryFloorPercent: snapshot.helperBatteryFloorPercent,
       temperatureProtectionEnabled: snapshot.temperatureProtectionEnabled,
       temperatureReleaseCelsius: snapshot.temperatureReleaseCelsius, temperatureBlocked: snapshot.temperatureBlocked,
       batteryTemperature: snapshot.batteryTemperature.map(export),
-      lidClosedKeepAwake: snapshot.lidClosedKeepAwake.rawValue, lidClosedHoldAllowed: snapshot.lidClosedHoldAllowed)
+      lidClosedKeepAwake: snapshot.lidClosedKeepAwake.rawValue, lidClosedHoldAllowed: snapshot.lidClosedHoldAllowed,
+      backgroundCommandsKeepAwake: snapshot.backgroundCommandsKeepAwake,
+      printRunsKeepAwake: snapshot.printRunsKeepAwake,
+      longRunningLimitMinutes: SnapshotExport.NullableMinutes(value: snapshot.longRunningLimitMinutes),
+      backgroundCommandsHolding: snapshot.backgroundCommandsHolding, printRunsHolding: snapshot.printRunsHolding)
   }
 
   static func export(_ reading: BatteryTemperatureReading) -> String {

@@ -206,7 +206,8 @@ struct SettingsEditorTests {
       case .releaseGraceSeconds: raw.releaseGraceSeconds = value
       case .stuckWindowMinutes: raw.stuckWindowSeconds = value * 60
       case .batteryLowPercent, .batteryResumePercent, .helperBatteryFloorPercent, .temperatureReleaseCelsius,
-        .pauseFirstMinutes, .pauseSecondMinutes, .keepAwakeFirstMinutes, .keepAwakeSecondMinutes:
+        .pauseFirstMinutes, .pauseSecondMinutes, .keepAwakeFirstMinutes, .keepAwakeSecondMinutes,
+        .longRunningLimitMinutes:
         Issue.record("not a timing field")
       }
       switch SettingsEditor.validate(field, text: text, in: base) {
@@ -288,6 +289,51 @@ struct SettingsEditorTests {
     case .keepAwakeSecondMinutes: settings.keepAwakeSecondMinutes
     default: nil
     }
+  }
+
+  @Test(arguments: [("14", false), ("15", true), ("120", true), ("720", true), ("721", false), ("abc", false)])
+  func theTimeLimitFieldAcceptsFifteenToSevenHundredTwentyMinutes(_ text: String, _ accepted: Bool) throws {
+    let message = "Enter a whole number of minutes from 15 to 720."
+    #expect(SettingsEditor.longRunningLimitRangeMessage == message)
+    let result = SettingsEditor.validate(.longRunningLimitMinutes, text: text, in: Settings())
+    if accepted {
+      let candidate = try #require(Self.accepted(result))
+      #expect(candidate.longRunningLimitMinutes == Int(text))
+      #expect(!Self.flaggedByTheCore(candidate))
+    } else {
+      #expect(Self.rejected(result) == message)
+    }
+  }
+
+  @Test func theTimeLimitFieldShowsAndStoresMinutes() throws {
+    #expect(SettingsField.longRunningLimitMinutes.rawValue == "longRunningLimitMinutes")
+    #expect(String(SettingsEditor.value(of: .longRunningLimitMinutes, in: Settings())) == "120")
+    let result = SettingsEditor.validate(.longRunningLimitMinutes, text: "45", in: Settings())
+    let candidate = try #require(Self.accepted(result))
+    var expected = Settings()
+    expected.longRunningLimitMinutes = 45
+    #expect(candidate == expected)
+    #expect(SettingsEditor.value(of: .longRunningLimitMinutes, in: candidate) == 45)
+    var outOfRange = Settings()
+    outOfRange.longRunningLimitMinutes = 5
+    #expect(outOfRange.validated().adjustments.map(\.key) == [SettingsField.longRunningLimitMinutes.rawValue])
+  }
+
+  @Test func theOtherFieldsShowTheirSettings() {
+    let settings = Settings()
+    let shown = Dictionary(
+      uniqueKeysWithValues: SettingsField.allCases.map { ($0, SettingsEditor.value(of: $0, in: settings)) })
+    #expect(shown[.batteryLowPercent] == settings.batteryLowPercent)
+    #expect(shown[.batteryResumePercent] == settings.batteryResumePercent)
+    #expect(shown[.transcriptWindowSeconds] == Int(settings.transcriptWindowSeconds))
+    #expect(shown[.releaseGraceSeconds] == Int(settings.releaseGraceSeconds))
+    #expect(shown[.stuckWindowMinutes] == Int(settings.stuckWindowSeconds / 60))
+    #expect(shown[.helperBatteryFloorPercent] == settings.helperBatteryFloorPercent)
+    #expect(shown[.temperatureReleaseCelsius] == settings.temperatureReleaseCelsius)
+    for field in Self.durationFields {
+      #expect(shown[field] == Self.minutes(field, in: settings))
+    }
+    #expect(SettingsEditor.value(of: .stuckWindowMinutes, in: Self.timing(window: 120, stuck: 61)) == 2)
   }
 
   @Test func theDurationFieldsTakeOneToFourteenForty() throws {

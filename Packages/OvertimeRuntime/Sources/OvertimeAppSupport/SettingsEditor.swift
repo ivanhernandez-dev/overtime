@@ -14,6 +14,7 @@ public enum SettingsField: String, Sendable, CaseIterable {
   case pauseSecondMinutes
   case keepAwakeFirstMinutes
   case keepAwakeSecondMinutes
+  case longRunningLimitMinutes
 }
 
 public struct SettingsValidationError: Error, Sendable, Equatable {
@@ -30,6 +31,8 @@ public enum SettingsEditor {
   public static let temperatureReleaseRangeMessage = rangeMessage(
     "a whole number of degrees", Settings.temperatureReleaseRange)
   public static let durationRangeMessage = rangeMessage("a whole number of minutes", Settings.presetMinutesRange)
+  public static let longRunningLimitRangeMessage = rangeMessage(
+    "a whole number of minutes", Settings.longRunningLimitRange)
 
   static func rangeMessage(_ kind: String, _ range: ClosedRange<Int>) -> String {
     "Enter \(kind) from \(range.lowerBound) to \(range.upperBound)."
@@ -208,8 +211,39 @@ public enum SettingsEditor {
       candidate.keepAwakeFirstMinutes = value
     case .keepAwakeSecondMinutes:
       candidate.keepAwakeSecondMinutes = value
+    case .longRunningLimitMinutes:
+      candidate.longRunningLimitMinutes = value
     }
     return candidate
+  }
+
+  public static func value(of field: SettingsField, in settings: Settings) -> Int {
+    switch field {
+    case .batteryLowPercent:
+      settings.batteryLowPercent
+    case .batteryResumePercent:
+      settings.batteryResumePercent
+    case .transcriptWindowSeconds:
+      Int(settings.transcriptWindowSeconds.rounded())
+    case .releaseGraceSeconds:
+      Int(settings.releaseGraceSeconds.rounded())
+    case .stuckWindowMinutes:
+      Int((settings.stuckWindowSeconds / 60).rounded(.up))
+    case .helperBatteryFloorPercent:
+      settings.helperBatteryFloorPercent
+    case .temperatureReleaseCelsius:
+      settings.temperatureReleaseCelsius
+    case .pauseFirstMinutes:
+      settings.pauseFirstMinutes
+    case .pauseSecondMinutes:
+      settings.pauseSecondMinutes
+    case .keepAwakeFirstMinutes:
+      settings.keepAwakeFirstMinutes
+    case .keepAwakeSecondMinutes:
+      settings.keepAwakeSecondMinutes
+    case .longRunningLimitMinutes:
+      settings.longRunningLimitMinutes
+    }
   }
 
   static func rangeError(_ field: SettingsField, in settings: Settings) -> SettingsValidationError {
@@ -230,6 +264,8 @@ public enum SettingsEditor {
       SettingsValidationError(message: temperatureReleaseRangeMessage)
     case .pauseFirstMinutes, .pauseSecondMinutes, .keepAwakeFirstMinutes, .keepAwakeSecondMinutes:
       SettingsValidationError(message: durationRangeMessage)
+    case .longRunningLimitMinutes:
+      SettingsValidationError(message: longRunningLimitRangeMessage)
     }
   }
 
@@ -288,6 +324,9 @@ public enum SettingsEditor {
         ? nil : rangeError(field, in: settings)
     case .keepAwakeSecondMinutes:
       return Settings.presetMinutesRange.contains(settings.keepAwakeSecondMinutes)
+        ? nil : rangeError(field, in: settings)
+    case .longRunningLimitMinutes:
+      return Settings.longRunningLimitRange.contains(settings.longRunningLimitMinutes)
         ? nil : rangeError(field, in: settings)
     }
   }

@@ -98,8 +98,8 @@ struct DiagnosticsManifestTests {
     "  unplug protection if it is installed.",
     "- snapshot.json: what Overtime knew when the archive was made. For each",
     "  Claude Code session it lists the process ID, the working folder, the",
-    "  terminal and the start time. It holds no command lines and no transcript",
-    "  content.",
+    "  terminal, the start time, and whether it is a claude -p run or is waiting",
+    "  on a command. It holds no command lines and no transcript content.",
     "- self-test.json, status.txt and detection-health.txt: the last self-test",
     "  result, the app and macOS versions, the Mac model, the login item, the",
     "  state of unplug protection, and any problem Overtime had finding Claude",
@@ -353,6 +353,8 @@ struct DiagnosticsManifestTests {
     if item.path != "lidClosedHoldAllowed" {
       snapshot.lidClosedHoldAllowed = false
     }
+    snapshot.backgroundCommandsKeepAwake = false
+    snapshot.printRunsKeepAwake = false
     let object = try Self.object(DiagnosticsManifest.snapshotJSON(snapshot))
     #expect(Self.truths(in: object) == [item.path])
   }
@@ -391,9 +393,11 @@ struct DiagnosticsManifestTests {
         "wantedSince", "graceDeadline", "coexistenceWarned", "amphetamineRunning", "otherTools", "counters",
         "detectionWarnings", "selfTest", "helper", "network", "sessions", "batteryProtectionEnabled",
         "helperBatteryFloorPercent", "temperatureProtectionEnabled", "temperatureReleaseCelsius", "temperatureBlocked",
-        "lidClosedKeepAwake", "lidClosedHoldAllowed",
+        "lidClosedKeepAwake", "lidClosedHoldAllowed", "backgroundCommandsKeepAwake", "printRunsKeepAwake",
+        "longRunningLimitMinutes", "backgroundCommandsHolding", "printRunsHolding",
       ])
-    for key in Self.keys(in: object).map({ $0.lowercased() }) {
+    let settingKeys: Set<String> = ["backgroundCommandsKeepAwake", "backgroundCommandsHolding"]
+    for key in Self.keys(in: object).filter({ !settingKeys.contains($0) }).map({ $0.lowercased() }) {
       for word in ["arg", "exec", "command", "path", "transcript"] {
         #expect(!key.contains(word), "\(key) names \(word)")
       }
@@ -531,13 +535,81 @@ struct DiagnosticsManifestTests {
     let object = try Self.object(DiagnosticsManifest.snapshotJSON(Self.fullSnapshot))
     let sessions = try #require(object["sessions"] as? [[String: Any]])
     #expect(sessions.count == 2)
-    #expect(Set(sessions[0].keys) == ["pid", "cwd", "tty", "start"])
+    #expect(Set(sessions[0].keys) == ["pid", "cwd", "tty", "start", "waiting", "printRun", "terminal"])
     #expect(sessions[0]["pid"] as? Int == 4_242)
     #expect(sessions[0]["cwd"] as? String == "/Users/ivan/work/overtime")
     #expect(sessions[0]["tty"] as? String == "ttys003")
     #expect(sessions[0]["start"] as? Int == 7_000)
-    #expect(Set(sessions[1].keys) == ["pid"])
+    #expect(Set(sessions[1].keys) == ["pid", "waiting", "printRun", "terminal"])
     #expect(sessions[1]["pid"] as? Int == 4_243)
+  }
+
+  @Test func theSnapshotExportsTheLongRunningState() throws {
+    let defaults = try Self.object(DiagnosticsManifest.snapshotJSON(EngineSnapshot()))
+    #expect(defaults["backgroundCommandsKeepAwake"] as? Bool == true)
+    #expect(defaults["printRunsKeepAwake"] as? Bool == true)
+    #expect(defaults["longRunningLimitMinutes"] is NSNull)
+    #expect(defaults["backgroundCommandsHolding"] as? Bool == false)
+    #expect(defaults["printRunsHolding"] as? Bool == false)
+    var settings = Settings()
+    settings.longRunningLimitEnabled = true
+    let limited = try Self.object(
+      DiagnosticsManifest.snapshotJSON(EngineSnapshot(state: AppState(mode: .live), settings: settings)))
+    #expect(limited["longRunningLimitMinutes"] as? Int == 120)
+    let changed = try Self.object(
+      DiagnosticsManifest.snapshotJSON(
+        EngineSnapshot(
+          backgroundCommandsKeepAwake: false, printRunsKeepAwake: false, longRunningLimitMinutes: 45,
+          backgroundCommandsHolding: true, printRunsHolding: true)))
+    #expect(changed["backgroundCommandsKeepAwake"] as? Bool == false)
+    #expect(changed["printRunsKeepAwake"] as? Bool == false)
+    #expect(changed["longRunningLimitMinutes"] as? Int == 45)
+    #expect(changed["backgroundCommandsHolding"] as? Bool == true)
+    #expect(changed["printRunsHolding"] as? Bool == true)
+  }
+
+  static var longRunningSessions: [SessionSummary] {
+    let since = Instant(nanoseconds: 7_000)
+    return [
+      SessionSummary(pid: 10, cwd: "/Users/dev/api", ttyName: "ttys003", startMono: since, waitingSince: since),
+      SessionSummary(
+        pid: 11, cwd: "/opt/web", ttyName: nil, startMono: since, waitingSince: since, terminal: false),
+      SessionSummary(
+        pid: 12, cwd: "/Users/dev/review", ttyName: nil, startMono: since, printRun: true, terminal: false),
+      SessionSummary(pid: 13, cwd: "/Users/dev/notes", ttyName: "ttys004", startMono: since),
+    ]
+  }
+
+  @Test func eachSessionExportsItsKind() throws {
+    let object = try Self.object(
+      DiagnosticsManifest.snapshotJSON(EngineSnapshot(sessions: Self.longRunningSessions)))
+    let sessions = try #require(object["sessions"] as? [[String: Any]])
+    #expect(sessions.compactMap { $0["pid"] as? Int } == [10, 11, 12, 13])
+    #expect(sessions.compactMap { $0["waiting"] as? Bool } == [true, true, false, false])
+    #expect(sessions.compactMap { $0["terminal"] as? Bool } == [true, false, false, true])
+    #expect(sessions.compactMap { $0["printRun"] as? Bool } == [false, false, true, false])
+  }
+
+  @Test func theReadmeDescribesTheSessionKinds() {
+    let unwrapped = DiagnosticsManifest.readmeText.replacingOccurrences(of: "\n  ", with: " ")
+    #expect(
+      unwrapped.contains(
+        "- snapshot.json: what Overtime knew when the archive was made. For each Claude Code session it lists the process ID, the working folder, the terminal, the start time, and whether it is a claude -p run or is waiting on a command. It holds no command lines and no transcript content."
+      ))
+  }
+
+  @Test func theExportHoldsNoCommandText() {
+    var settings = Settings()
+    settings.longRunningLimitEnabled = true
+    var state = AppState(mode: .live)
+    state.busy.backgroundHolding = true
+    state.busy.printHolding = true
+    let snapshot = EngineSnapshot(state: state, settings: settings, sessions: Self.longRunningSessions)
+    let text = String(decoding: DiagnosticsManifest.snapshotJSON(snapshot), as: UTF8.self)
+    #expect(text.contains("\"sessions\""))
+    for fragment in ["pwd -P", "shell-snapshots", "--print", "snapshot-zsh", " -c "] {
+      #expect(!text.contains(fragment), "snapshot.json carries \(fragment)")
+    }
   }
 
   struct SnapshotCase: Sendable, CustomTestStringConvertible {
@@ -606,6 +678,8 @@ struct DiagnosticsManifestTests {
         "coexistenceWarned", "amphetamineRunning", "otherTools", "counters", "detectionWarnings", "selfTest", "helper",
         "sessions", "batteryProtectionEnabled", "helperBatteryFloorPercent", "temperatureProtectionEnabled",
         "temperatureReleaseCelsius", "temperatureBlocked", "lidClosedKeepAwake", "lidClosedHoldAllowed",
+        "backgroundCommandsKeepAwake", "printRunsKeepAwake", "longRunningLimitMinutes", "backgroundCommandsHolding",
+        "printRunsHolding",
       ])
     #expect((object["helper"] as? [String: Any])?.keys.sorted() == ["engaged"])
     #expect((object["selfTest"] as? [String: Any])?.keys.sorted() == ["errorActive", "failures", "runs", "status"])

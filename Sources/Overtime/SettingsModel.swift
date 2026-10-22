@@ -642,6 +642,8 @@ final class SettingsModel {
       5
     case .pauseFirstMinutes, .pauseSecondMinutes, .keepAwakeFirstMinutes, .keepAwakeSecondMinutes:
       5
+    case .longRunningLimitMinutes:
+      15
     }
   }
 
@@ -726,30 +728,7 @@ final class SettingsModel {
   }
 
   static func value(of field: SettingsField, in settings: Settings) -> Int {
-    switch field {
-    case .batteryLowPercent:
-      settings.batteryLowPercent
-    case .batteryResumePercent:
-      settings.batteryResumePercent
-    case .transcriptWindowSeconds:
-      Int(settings.transcriptWindowSeconds.rounded())
-    case .releaseGraceSeconds:
-      Int(settings.releaseGraceSeconds.rounded())
-    case .stuckWindowMinutes:
-      Int((settings.stuckWindowSeconds / 60).rounded(.up))
-    case .helperBatteryFloorPercent:
-      settings.helperBatteryFloorPercent
-    case .temperatureReleaseCelsius:
-      settings.temperatureReleaseCelsius
-    case .pauseFirstMinutes:
-      settings.pauseFirstMinutes
-    case .pauseSecondMinutes:
-      settings.pauseSecondMinutes
-    case .keepAwakeFirstMinutes:
-      settings.keepAwakeFirstMinutes
-    case .keepAwakeSecondMinutes:
-      settings.keepAwakeSecondMinutes
-    }
+    SettingsEditor.value(of: field, in: settings)
   }
 
   static func stepBounds(for field: SettingsField, in settings: Settings) -> ClosedRange<Int> {
@@ -770,6 +749,8 @@ final class SettingsModel {
       Settings.temperatureReleaseRange
     case .pauseFirstMinutes, .pauseSecondMinutes, .keepAwakeFirstMinutes, .keepAwakeSecondMinutes:
       Settings.presetMinutesRange
+    case .longRunningLimitMinutes:
+      Settings.longRunningLimitRange
     }
   }
 }
