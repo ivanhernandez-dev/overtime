@@ -2,7 +2,7 @@
 
 All notable changes to Overtime are listed here, in the Keep a Changelog format, and versions follow Semantic Versioning.
 
-## [1.2.0]
+## [1.2.0] - 2026-10-22
 
 ### Added
 
