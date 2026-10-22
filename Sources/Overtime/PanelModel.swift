@@ -79,7 +79,8 @@ final class PanelModel {
 
   func sessionList(atMono now: Instant) -> SessionList {
     PanelContent.sessions(
-      snapshot?.sessions ?? [], busy: snapshot?.busy == true, now: now, homeDirectory: homeDirectory)
+      snapshot?.sessions ?? [], busy: snapshot?.busy == true, now: now, homeDirectory: homeDirectory,
+      rules: LongRunningRules(snapshot: snapshot))
   }
 
   var sessionList: SessionList {

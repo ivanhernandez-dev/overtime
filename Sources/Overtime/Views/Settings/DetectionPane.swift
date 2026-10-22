@@ -17,8 +17,7 @@ struct DetectionPane: View {
   static let releaseGraceCaption = "How long Overtime waits after Claude goes quiet before letting the Mac sleep."
   static let stuckLimitCaption = "A terminal session with no transcript activity for this long is ignored."
   static let entrypointsTitle = "Ignored entrypoints"
-  static let entrypointsCaption =
-    "Transcripts whose entrypoint matches are not counted as Claude working. The default, sdk-*, ignores claude -p and Agent SDK automations."
+  static let entrypointsCaption = LongRunningCopy.entrypointsCaption
   static let entrypointPlaceholder = "sdk-*"
   static let noEntrypointsTitle = "No ignored entrypoints."
   static let noEntrypointsBody = "Every Claude transcript counts, including claude -p and Agent SDK automations."
@@ -59,6 +58,33 @@ struct DetectionPane: View {
           model: model)
       } header: {
         SettingsSectionHeader(title: Self.timingTitle)
+      }
+      Section {
+        LongRunningSwitchRow(
+          label: LongRunningCopy.backgroundCommandsLabel, caption: LongRunningCopy.backgroundCommandsCaption,
+          isOn: model.backgroundCommandsKeepAwake, model: model
+        ) { enabled in
+          await model.setBackgroundCommandsKeepAwake(enabled)
+        }
+        LongRunningSwitchRow(
+          label: LongRunningCopy.printRunsLabel, caption: LongRunningCopy.printRunsCaption,
+          isOn: model.printRunsKeepAwake, model: model
+        ) { enabled in
+          await model.setPrintRunsKeepAwake(enabled)
+        }
+        LongRunningSwitchRow(
+          label: LongRunningCopy.limitLabel, caption: nil, hint: LongRunningCopy.limitCaption,
+          isOn: model.longRunningLimitEnabled, model: model
+        ) { enabled in
+          await model.setLongRunningLimitEnabled(enabled)
+        }
+        NumericSettingRow(
+          label: LongRunningCopy.limitFieldLabel, unit: "minutes", caption: LongRunningCopy.limitCaption,
+          field: .longRunningLimitMinutes, model: model, secondary: !model.longRunningLimitEnabled
+        )
+        .disabled(!model.longRunningLimitEnabled)
+      } header: {
+        SettingsSectionHeader(title: LongRunningCopy.sectionTitle)
       }
       Section {
         ForEach(model.folderRows) { row in
@@ -115,6 +141,48 @@ struct DetectionPane: View {
     .onChange(of: model.folderMessage) { _, message in
       guard let message else { return }
       AccessibilityNotification.Announcement(message).post()
+    }
+  }
+}
+
+struct LongRunningSwitchRow: View {
+  let label: String
+  let caption: String?
+  var hint: String?
+  let isOn: Bool
+  let model: SettingsModel
+  let set: @MainActor (Bool) async -> SettingsCommitResult?
+
+  init(
+    label: String, caption: String?, hint: String? = nil, isOn: Bool, model: SettingsModel,
+    set: @escaping @MainActor (Bool) async -> SettingsCommitResult?
+  ) {
+    self.label = label
+    self.caption = caption
+    self.hint = hint ?? caption
+    self.isOn = isOn
+    self.model = model
+    self.set = set
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 4) {
+      Toggle(
+        label,
+        isOn: Binding(
+          get: { isOn },
+          set: { enabled in
+            Task { _ = await set(enabled) }
+          })
+      )
+      .toggleStyle(.switch)
+      .controlSize(.mini)
+      .disabled(!model.canEdit)
+      .accessibilityHint(ifPresent: hint)
+      if let caption {
+        SettingsSectionCaption(text: caption)
+          .accessibilityHidden(true)
+      }
     }
   }
 }

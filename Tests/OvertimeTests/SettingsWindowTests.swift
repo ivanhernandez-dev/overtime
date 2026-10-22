@@ -886,7 +886,7 @@ struct SettingsWindowTests {
       DetectionPane.stuckLimitCaption == "A terminal session with no transcript activity for this long is ignored.")
     #expect(
       DetectionPane.entrypointsCaption
-        == "Transcripts whose entrypoint matches are not counted as Claude working. The default, sdk-*, ignores claude -p and Agent SDK automations."
+        == "Transcripts whose entrypoint matches are not counted as Claude working. The default, sdk-*, ignores the transcripts of claude -p and Agent SDK automations. A claude -p run still keeps the Mac awake while it runs; see Long-running work."
     )
     #expect(DetectionPane.entrypointPlaceholder == "sdk-*")
   }

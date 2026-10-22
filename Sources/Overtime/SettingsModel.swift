@@ -481,6 +481,48 @@ final class SettingsModel {
     }
   }
 
+  var backgroundCommandsKeepAwake: Bool {
+    settings.backgroundCommandsKeepAwake
+  }
+
+  @discardableResult
+  func setBackgroundCommandsKeepAwake(_ enabled: Bool) async -> SettingsCommitResult? {
+    await serialized { [self] in
+      guard settings.backgroundCommandsKeepAwake != enabled else { return nil }
+      var candidate = settings
+      candidate.backgroundCommandsKeepAwake = enabled
+      return await save(candidate)
+    }
+  }
+
+  var printRunsKeepAwake: Bool {
+    settings.printRunsKeepAwake
+  }
+
+  @discardableResult
+  func setPrintRunsKeepAwake(_ enabled: Bool) async -> SettingsCommitResult? {
+    await serialized { [self] in
+      guard settings.printRunsKeepAwake != enabled else { return nil }
+      var candidate = settings
+      candidate.printRunsKeepAwake = enabled
+      return await save(candidate)
+    }
+  }
+
+  var longRunningLimitEnabled: Bool {
+    settings.longRunningLimitEnabled
+  }
+
+  @discardableResult
+  func setLongRunningLimitEnabled(_ enabled: Bool) async -> SettingsCommitResult? {
+    await serialized { [self] in
+      guard settings.longRunningLimitEnabled != enabled else { return nil }
+      var candidate = settings
+      candidate.longRunningLimitEnabled = enabled
+      return await save(candidate)
+    }
+  }
+
   var pauseChoices: [PauseChoice] {
     PauseChoice.menu(timedMinutes: [settings.pauseFirstMinutes, settings.pauseSecondMinutes])
   }

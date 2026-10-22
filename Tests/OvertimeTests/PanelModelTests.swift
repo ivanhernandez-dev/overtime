@@ -63,6 +63,76 @@ struct PanelModelTests {
     #expect(bound.model.presentation.reason == "Claude is working.")
   }
 
+  @Test func aWaitingSessionInTheSnapshotBecomesAWaitingRow() async throws {
+    let bound = Bound()
+    let sessions = [
+      SessionSummary(
+        pid: 21, cwd: "/Users/dev/api", ttyName: "ttys003", startMono: bound.started(secondsAgo: 86_400),
+        waitingSince: bound.started(secondsAgo: 720)),
+      SessionSummary(pid: 22, cwd: "/Users/dev/notes", ttyName: "ttys005", startMono: bound.started(secondsAgo: 600)),
+    ]
+    bound.host.publish(
+      EngineSnapshot(
+        busy: true, wanted: true, reason: "busy", lidClosed: false, sessions: sessions,
+        backgroundCommandsHolding: true))
+    #expect(await waitUntil { bound.model.snapshot?.sessions.count == 2 })
+    let list = bound.model.sessionList
+    let row = try #require(list.rows.first)
+    #expect(list.rows.map(\.id) == [21])
+    #expect(row.title == "api")
+    #expect(row.caption == "Waiting · background command · 12m")
+    #expect(list.summaryText == "1 more open, idle")
+    #expect(bound.model.presentation.reason == "Claude is waiting on a background command.")
+  }
+
+  @Test func aPrintRunInTheSnapshotBecomesAPrintRow() async throws {
+    let bound = Bound()
+    let sessions = [
+      SessionSummary(
+        pid: 31, cwd: "/Users/dev/review", ttyName: nil, startMono: bound.started(secondsAgo: 300), printRun: true,
+        terminal: false)
+    ]
+    bound.host.publish(
+      EngineSnapshot(
+        busy: true, wanted: true, reason: "busy", lidClosed: false, sessions: sessions, printRunsHolding: true))
+    #expect(await waitUntil { bound.model.snapshot?.sessions.count == 1 })
+    let list = bound.model.sessionList
+    let row = try #require(list.rows.first)
+    #expect(row.title == "review")
+    #expect(row.caption == "Working · claude -p · 5m")
+    #expect(row.accessibilityText == "claude -p run in ~/review, working for 5 minutes")
+    #expect(list.summaryText == nil)
+    #expect(bound.model.presentation.reason == "Claude is working in 1 session.")
+  }
+
+  @Test func aWaitingSessionIsHiddenWhenItNoLongerHolds() async {
+    let bound = Bound()
+    let waiting = SessionSummary(
+      pid: 41, cwd: "/Users/dev/api", ttyName: "ttys003", startMono: bound.started(secondsAgo: 86_400),
+      waitingSince: bound.started(secondsAgo: 720))
+    let commandWithoutTerminal = SessionSummary(
+      pid: 42, cwd: "/opt/web", ttyName: nil, startMono: bound.started(secondsAgo: 900),
+      waitingSince: bound.started(secondsAgo: 600), terminal: false)
+    bound.host.publish(
+      EngineSnapshot(
+        busy: true, wanted: true, reason: "busy", lidClosed: false, sessions: [waiting, commandWithoutTerminal],
+        backgroundCommandsHolding: true))
+    #expect(await waitUntil { bound.model.sessionList.rows.count == 2 })
+    #expect(
+      bound.model.sessionList.rows.map(\.caption) == [
+        "Waiting · background command · 12m", "Running a command · 10m",
+      ])
+    bound.host.publish(
+      EngineSnapshot(
+        busy: true, wanted: true, reason: "busy", lidClosed: false, sessions: [waiting, commandWithoutTerminal],
+        backgroundCommandsHolding: false))
+    #expect(await waitUntil { bound.model.snapshot?.backgroundCommandsHolding == false })
+    let list = bound.model.sessionList
+    #expect(list.rows.isEmpty)
+    #expect(list.placeholder == .transcriptOnly)
+    #expect(list.summaryText == "1 open, idle")
+  }
+
   @Test func noSessionsWhileIdleIsTheEmptyState() async {
     let bound = Bound()
     bound.host.publish(EngineSnapshot(busy: false, wanted: false, reason: "idle"))
