@@ -339,6 +339,54 @@ struct StatusPresentationTests {
     #expect(presentation.reason == reason)
   }
 
+  @Test(arguments: [
+    (0, 1, "Claude is waiting on a background command."),
+    (0, 2, "Claude is waiting on background commands in 2 sessions."),
+    (1, 1, "Claude is working in 1 session and waiting in 1 more."),
+    (2, 3, "Claude is working in 2 sessions and waiting in 3 more."),
+  ])
+  func theReasonCountsWaitingSessionsApart(_ working: Int, _ waiting: Int, _ reason: String) {
+    #expect(StatusPresentation.holdingReason(working: working, waiting: waiting) == reason)
+    let since = Instant(nanoseconds: 1_000_000_000_000)
+    let workingSessions = (0..<working).map {
+      SessionSummary(pid: Int32(100 + $0), cwd: "/tmp", ttyName: "ttys001", startMono: nil, workingSince: since)
+    }
+    let waitingSessions = (0..<waiting).map {
+      SessionSummary(pid: Int32(200 + $0), cwd: "/tmp", ttyName: "ttys002", startMono: nil, waitingSince: since)
+    }
+    let idle = [SessionSummary(pid: 300, cwd: "/tmp", ttyName: "ttys003", startMono: nil)]
+    let snapshot = EngineSnapshot(
+      busy: true, wanted: true, reason: "busy", lidClosed: false, sessions: workingSessions + waitingSessions + idle,
+      backgroundCommandsHolding: true)
+    let presentation = StatusPresentation.derive(snapshot: snapshot, hostFailure: nil, engineUnresponsive: false)
+    #expect(presentation.state == .holding)
+    #expect(presentation.reason == reason)
+  }
+
+  @Test func aRunningACommandRowCountsAsWorking() {
+    let since = Instant(nanoseconds: 1_000_000_000_000)
+    let command = SessionSummary(
+      pid: 400, cwd: "/tmp", ttyName: nil, startMono: since, waitingSince: since, terminal: false)
+    let snapshot = EngineSnapshot(
+      busy: true, wanted: true, reason: "busy", lidClosed: false, sessions: [command], backgroundCommandsHolding: true)
+    let presentation = StatusPresentation.derive(snapshot: snapshot, hostFailure: nil, engineUnresponsive: false)
+    #expect(presentation.reason == "Claude is working in 1 session.")
+    let run = SessionSummary(pid: 500, cwd: "/tmp", ttyName: nil, startMono: since, printRun: true, terminal: false)
+    let printSnapshot = EngineSnapshot(
+      busy: true, wanted: true, reason: "busy", lidClosed: false, sessions: [run], printRunsHolding: true)
+    let printPresentation = StatusPresentation.derive(
+      snapshot: printSnapshot, hostFailure: nil, engineUnresponsive: false)
+    #expect(printPresentation.reason == "Claude is working in 1 session.")
+  }
+
+  @Test(arguments: [
+    (0, "Claude is working."), (1, "Claude is working in 1 session."), (3, "Claude is working in 3 sessions."),
+  ])
+  func withoutWaitingRowsTheReasonIsUnchanged(_ working: Int, _ reason: String) {
+    #expect(StatusPresentation.holdingReason(working: working, waiting: 0) == reason)
+    #expect(StatusPresentation.holdingReason(sessionCount: working) == reason)
+  }
+
   @Test func sessionsDoNotChangeTheLidClosedReason() {
     let sessions = [SessionSummary(pid: 7, cwd: "/tmp", ttyName: "ttys001", startMono: nil)]
     let presentation = StatusPresentation.derive(

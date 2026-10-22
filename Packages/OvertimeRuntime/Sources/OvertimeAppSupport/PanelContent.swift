@@ -1,5 +1,6 @@
 import Foundation
 import OvertimeCore
+import OvertimeEngine
 import OvertimeSystem
 
 public struct SessionRow: Sendable, Equatable, Identifiable {
@@ -56,6 +57,34 @@ public struct SessionList: Sendable, Equatable {
   }
 }
 
+public struct LongRunningRules: Sendable, Equatable {
+  public var backgroundHolding: Bool
+  public var printHolding: Bool
+
+  public init(backgroundHolding: Bool, printHolding: Bool) {
+    self.backgroundHolding = backgroundHolding
+    self.printHolding = printHolding
+  }
+
+  public init(snapshot: EngineSnapshot?) {
+    self.init(
+      backgroundHolding: snapshot?.backgroundCommandsHolding == true, printHolding: snapshot?.printRunsHolding == true)
+  }
+
+  public static let none = LongRunningRules(backgroundHolding: false, printHolding: false)
+}
+
+public enum SessionRowKind: Sendable, Equatable {
+  case working
+  case printRun
+  case waiting
+  case runningCommand
+
+  public var countsAsWaiting: Bool {
+    self == .waiting
+  }
+}
+
 public enum PanelContent {
   public static let header = "Claude Sessions"
   public static let maxSessionRows = 5
@@ -73,11 +102,25 @@ public enum PanelContent {
     busy ? summaries.filter(\.isWorking) : []
   }
 
+  public static func kind(of summary: SessionSummary, busy: Bool, rules: LongRunningRules) -> SessionRowKind? {
+    guard busy else { return nil }
+    if summary.isWorking { return .working }
+    if summary.printRun, rules.printHolding { return .printRun }
+    if summary.isWaiting, rules.backgroundHolding { return summary.terminal ? .waiting : .runningCommand }
+    return nil
+  }
+
+  public static func listed(_ summaries: [SessionSummary], busy: Bool, rules: LongRunningRules) -> [SessionSummary] {
+    summaries.filter { kind(of: $0, busy: busy, rules: rules) != nil }
+  }
+
   public static func sessions(
-    _ summaries: [SessionSummary], busy: Bool, now: Instant, homeDirectory: String
+    _ summaries: [SessionSummary], busy: Bool, now: Instant, homeDirectory: String,
+    rules: LongRunningRules = .none
   ) -> SessionList {
-    let listed = working(summaries, busy: busy)
-    let idle = summaries.count - listed.count
+    let listed = listed(summaries, busy: busy, rules: rules)
+    let listedIDs = Set(listed.map(\.pid))
+    let idle = summaries.filter { $0.terminal && !listedIDs.contains($0.pid) }.count
     guard !listed.isEmpty else {
       let placeholder: SessionPlaceholder =
         busy ? .transcriptOnly : summaries.isEmpty ? .noSessions : .noneWorking
@@ -87,7 +130,9 @@ public enum PanelContent {
     let paths = shownSummaries.map { $0.cwd.map { abbreviatingHome($0, homeDirectory: homeDirectory) } }
     let names = titles(forPaths: paths)
     let shown = zip(shownSummaries, names).map { summary, name in
-      var shownRow = row(for: summary, now: now, homeDirectory: homeDirectory)
+      var shownRow = row(
+        for: summary, kind: kind(of: summary, busy: busy, rules: rules) ?? .working, now: now,
+        homeDirectory: homeDirectory)
       shownRow.title = name
       return shownRow
     }
@@ -98,16 +143,49 @@ public enum PanelContent {
     "Working · \(TimingFormat.elapsed(seconds))"
   }
 
+  public static func waitingCaption(_ seconds: Double) -> String {
+    "Waiting · background command · \(TimingFormat.elapsed(seconds))"
+  }
+
+  public static func runningCommandCaption(_ seconds: Double) -> String {
+    "Running a command · \(TimingFormat.elapsed(seconds))"
+  }
+
+  public static func printRunCaption(_ seconds: Double) -> String {
+    "Working · claude -p · \(TimingFormat.elapsed(seconds))"
+  }
+
   public static func row(for summary: SessionSummary, now: Instant, homeDirectory: String) -> SessionRow {
-    let worked = summary.workingSince.map { max(0, now.seconds(since: $0)) } ?? 0
+    row(for: summary, kind: .working, now: now, homeDirectory: homeDirectory)
+  }
+
+  public static func row(for summary: SessionSummary, kind: SessionRowKind, now: Instant, homeDirectory: String)
+    -> SessionRow
+  {
+    let since: Instant? =
+      switch kind {
+      case .working: summary.workingSince
+      case .printRun: summary.startMono
+      case .waiting, .runningCommand: summary.waitingSince
+      }
+    let elapsed = since.map { max(0, now.seconds(since: $0)) } ?? 0
     let path = summary.cwd.map { abbreviatingHome($0, homeDirectory: homeDirectory) }
+    let place = path ?? "an unknown folder"
+    let spoken = TimingFormat.spokenElapsed(elapsed)
+    let (caption, accessibilityText): (String, String) =
+      switch kind {
+      case .working:
+        (workingCaption(elapsed), "Session in \(place), working for \(spoken)")
+      case .printRun:
+        (printRunCaption(elapsed), "claude -p run in \(place), working for \(spoken)")
+      case .waiting:
+        (waitingCaption(elapsed), "Session in \(place), waiting on a background command for \(spoken)")
+      case .runningCommand:
+        (runningCommandCaption(elapsed), "Session in \(place), running a command for \(spoken)")
+      }
     return SessionRow(
-      id: summary.pid,
-      title: folderName(path),
-      fullPath: path ?? unknownFolder,
-      caption: workingCaption(worked),
-      accessibilityText:
-        "Session in \(path ?? "an unknown folder"), working for \(TimingFormat.spokenElapsed(worked))")
+      id: summary.pid, title: folderName(path), fullPath: path ?? unknownFolder, caption: caption,
+      accessibilityText: accessibilityText)
   }
 
   public static func titles(forPaths paths: [String?]) -> [String] {

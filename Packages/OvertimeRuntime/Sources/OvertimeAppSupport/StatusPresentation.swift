@@ -73,8 +73,12 @@ public struct StatusPresentation: Sendable, Equatable {
         uninstalling: uninstalling))
     switch result.state {
     case .holding:
-      result.reason = holdingReason(
-        sessionCount: PanelContent.working(snapshot?.sessions ?? [], busy: snapshot?.busy == true).count)
+      let rules = LongRunningRules(snapshot: snapshot)
+      let kinds = (snapshot?.sessions ?? []).compactMap {
+        PanelContent.kind(of: $0, busy: snapshot?.busy == true, rules: rules)
+      }
+      let waiting = kinds.filter(\.countsAsWaiting).count
+      result.reason = holdingReason(working: kinds.count - waiting, waiting: waiting)
     case .batteryFloor:
       if let snapshot, !snapshot.batteryBlocked, snapshot.temperatureBlocked {
         result.title = hotTitle
@@ -107,6 +111,17 @@ public struct StatusPresentation: Sendable, Equatable {
   public static func overrideReason(lowPercent: Int?) -> String {
     guard let lowPercent else { return "You turned on \(ControlMapping.keepAwakeLabel)." }
     return "You turned on \(ControlMapping.keepAwakeLabel). It still stops at \(lowPercent)% battery."
+  }
+
+  public static func holdingReason(working: Int, waiting: Int) -> String {
+    guard waiting > 0 else { return holdingReason(sessionCount: working) }
+    guard working > 0 else {
+      return waiting == 1
+        ? "Claude is waiting on a background command."
+        : "Claude is waiting on background commands in \(waiting) sessions."
+    }
+    let sessions = working == 1 ? "1 session" : "\(working) sessions"
+    return "Claude is working in \(sessions) and waiting in \(waiting) more."
   }
 
   public static func holdingReason(sessionCount: Int) -> String {

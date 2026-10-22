@@ -18,8 +18,30 @@ struct PanelContentTests {
       workingSince: workingFor.map { clock.mono().adding(seconds: -$0) })
   }
 
-  static func sessions(_ summaries: [SessionSummary], busy: Bool = true) -> SessionList {
-    PanelContent.sessions(summaries, busy: busy, now: clock.mono(), homeDirectory: home)
+  static func sessions(_ summaries: [SessionSummary], busy: Bool = true, rules: LongRunningRules = .none)
+    -> SessionList
+  {
+    PanelContent.sessions(summaries, busy: busy, now: clock.mono(), homeDirectory: home, rules: rules)
+  }
+
+  static let bothHold = LongRunningRules(backgroundHolding: true, printHolding: true)
+  static let backgroundHolds = LongRunningRules(backgroundHolding: true, printHolding: false)
+  static let printHolds = LongRunningRules(backgroundHolding: false, printHolding: true)
+
+  static func waiting(pid: Int32, cwd: String? = "/Users/dev/proj", terminal: Bool = true, waitingFor: Double)
+    -> SessionSummary
+  {
+    SessionSummary(
+      pid: pid, cwd: cwd, ttyName: terminal ? "ttys006" : nil, startMono: clock.mono().adding(seconds: -86_400),
+      waitingSince: clock.mono().adding(seconds: -waitingFor), terminal: terminal)
+  }
+
+  static func printRun(pid: Int32, cwd: String? = "/Users/dev/review", tty: String? = nil, runningFor: Double)
+    -> SessionSummary
+  {
+    SessionSummary(
+      pid: pid, cwd: cwd, ttyName: tty, startMono: clock.mono().adding(seconds: -runningFor), printRun: true,
+      terminal: tty != nil)
   }
 
   static func claude(pid: Int32, start: UInt64) -> ProcessRecord {
@@ -210,6 +232,126 @@ struct PanelContentTests {
     #expect(SessionPlaceholder.noneWorking.heading == "No Claude session is working")
     #expect(list.placeholder?.heading != SessionPlaceholder.noneWorking.heading)
     #expect(list.summaryText == nil)
+  }
+
+  @Test func aWaitingTerminalSessionShowsWaitingOnABackgroundCommand() throws {
+    let list = Self.sessions([Self.waiting(pid: 1, waitingFor: 720)], rules: Self.backgroundHolds)
+    let row = try #require(list.rows.first)
+    #expect(list.rows.count == 1)
+    #expect(row.id == 1)
+    #expect(row.title == "proj")
+    #expect(row.fullPath == "~/proj")
+    #expect(row.caption == "Waiting · background command · 12m")
+    #expect(row.accessibilityText == "Session in ~/proj, waiting on a background command for 12 minutes")
+    #expect(list.placeholder == nil)
+  }
+
+  @Test func aWaitingSessionWithoutATerminalShowsRunningACommand() throws {
+    let list = Self.sessions(
+      [Self.waiting(pid: 2, cwd: "/opt/web", terminal: false, waitingFor: 720)], rules: Self.backgroundHolds)
+    let row = try #require(list.rows.first)
+    #expect(row.title == "web")
+    #expect(row.caption == "Running a command · 12m")
+    #expect(row.accessibilityText == "Session in /opt/web, running a command for 12 minutes")
+  }
+
+  @Test func aClaudePrintRunShowsWorkingClaudeP() throws {
+    let list = Self.sessions([Self.printRun(pid: 3, runningFor: 3900)], rules: Self.printHolds)
+    let row = try #require(list.rows.first)
+    #expect(row.title == "review")
+    #expect(row.fullPath == "~/review")
+    #expect(row.caption == "Working · claude -p · 1h 5m")
+    #expect(row.accessibilityText == "claude -p run in ~/review, working for 1 hour 5 minutes")
+  }
+
+  @Test func workingWinsOverAPrintRunWhichWinsOverWaiting() throws {
+    let now = Self.clock.mono()
+    let everything = SessionSummary(
+      pid: 4, cwd: "/Users/dev/proj", ttyName: "ttys003", startMono: now.adding(seconds: -900),
+      workingSince: now.adding(seconds: -600), waitingSince: now.adding(seconds: -300), printRun: true)
+    let printAndWaiting = SessionSummary(
+      pid: 5, cwd: "/Users/dev/proj", ttyName: "ttys004", startMono: now.adding(seconds: -900),
+      waitingSince: now.adding(seconds: -300), printRun: true)
+    let working = try #require(Self.sessions([everything], rules: Self.bothHold).rows.first)
+    #expect(working.caption == "Working · 10m")
+    #expect(working.accessibilityText == "Session in ~/proj, working for 10 minutes")
+    let printRow = try #require(Self.sessions([printAndWaiting], rules: Self.bothHold).rows.first)
+    #expect(printRow.caption == "Working · claude -p · 15m")
+    let waitingOnly = try #require(Self.sessions([printAndWaiting], rules: Self.backgroundHolds).rows.first)
+    #expect(waitingOnly.caption == "Waiting · background command · 5m")
+  }
+
+  @Test func waitingAndPrintRowsNeedTheirHold() {
+    let summaries = [
+      Self.session(pid: 1, workingFor: 600), Self.waiting(pid: 2, waitingFor: 300),
+      Self.printRun(pid: 3, runningFor: 200),
+    ]
+    #expect(Self.sessions(summaries, rules: .none).rows.map(\.id) == [1])
+    #expect(Self.sessions(summaries, rules: Self.backgroundHolds).rows.map(\.id) == [1, 2])
+    #expect(Self.sessions(summaries, rules: Self.printHolds).rows.map(\.id) == [1, 3])
+    #expect(Self.sessions(summaries, rules: Self.bothHold).rows.map(\.id) == [1, 2, 3])
+  }
+
+  @Test func aTerminalLessSessionIsNeverCountedAsIdle() {
+    let summaries = [
+      Self.session(pid: 1, workingFor: 600), Self.waiting(pid: 2, terminal: false, waitingFor: 300),
+      Self.printRun(pid: 3, runningFor: 200),
+    ]
+    let list = Self.sessions(summaries, rules: .none)
+    #expect(list.rows.map(\.id) == [1])
+    #expect(list.idle == 0)
+    #expect(list.summaryText == nil)
+    let terminalWaiting = Self.sessions(summaries + [Self.waiting(pid: 4, waitingFor: 300)], rules: .none)
+    #expect(terminalWaiting.idle == 1)
+    #expect(terminalWaiting.summaryText == "1 more open, idle")
+  }
+
+  @Test func oneRowPerClaudeProcess() {
+    let interactive = Self.waiting(pid: 100, cwd: "/Users/dev/tools", waitingFor: 600)
+    let review = Self.printRun(pid: 200, cwd: "/Users/dev/repo", tty: "ttys008", runningFor: 300)
+    let idle = Self.session(pid: 300, cwd: "/Users/dev/notes", workingFor: nil)
+    let list = Self.sessions([interactive, review, idle], rules: Self.bothHold)
+    #expect(list.rows.map(\.id) == [100, 200])
+    #expect(Set(list.rows.map(\.id)).count == list.rows.count)
+    #expect(list.rows.map(\.caption) == ["Waiting · background command · 10m", "Working · claude -p · 5m"])
+    #expect(list.moreWorking == 0)
+    #expect(list.idle == 1)
+    #expect(list.summaryText == "1 more open, idle")
+  }
+
+  @Test func theBusyGateStillHidesEveryRow() {
+    let summaries = [
+      Self.session(pid: 1, workingFor: 600), Self.waiting(pid: 2, waitingFor: 300),
+      Self.waiting(pid: 3, terminal: false, waitingFor: 300), Self.printRun(pid: 4, runningFor: 200),
+    ]
+    for rules in [LongRunningRules.none, Self.backgroundHolds, Self.printHolds, Self.bothHold] {
+      let list = Self.sessions(summaries, busy: false, rules: rules)
+      #expect(list.rows.isEmpty)
+      #expect(list.moreWorking == 0)
+      #expect(PanelContent.listed(summaries, busy: false, rules: rules).isEmpty)
+    }
+  }
+
+  @Test func theReadmeFixtureListsTheSameRows() {
+    let now = Self.clock.mono()
+    let started = now.adding(seconds: -86_400)
+    let summaries = [
+      SessionSummary(
+        pid: 11, cwd: "/Users/dev/api", ttyName: "ttys003", startMono: started,
+        workingSince: now.adding(seconds: -3900)),
+      SessionSummary(
+        pid: 12, cwd: "/opt/web", ttyName: "ttys004", startMono: started, workingSince: now.adding(seconds: -30)),
+      SessionSummary(pid: 13, cwd: "/Users/dev/notes", ttyName: "ttys005", startMono: started),
+    ]
+    let snapshot = EngineSnapshot(busy: true, wanted: true, reason: "busy", lidClosed: false, sessions: summaries)
+    #expect(LongRunningRules(snapshot: snapshot) == .none)
+    let list = PanelContent.sessions(
+      summaries, busy: true, now: now, homeDirectory: Self.home, rules: LongRunningRules(snapshot: snapshot))
+    #expect(list == PanelContent.sessions(summaries, busy: true, now: now, homeDirectory: Self.home))
+    #expect(list.rows.map(\.id) == [11, 12])
+    #expect(list.rows.map(\.title) == ["api", "web"])
+    #expect(list.rows.map(\.caption) == ["Working · 1h 5m", "Working · <1m"])
+    #expect(list.summaryText == "1 more open, idle")
   }
 
   @Test(arguments: [
