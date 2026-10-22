@@ -2,7 +2,7 @@
 
 All notable changes to Overtime are listed here, in the Keep a Changelog format, and versions follow Semantic Versioning.
 
-## [Unreleased]
+## [1.1.0]
 
 ### Added
 
