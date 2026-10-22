@@ -8,6 +8,14 @@ public struct BusyState: Sendable, Equatable {
   public var busy: Bool?
   public var seenEntrypoints: Set<String> = []
   public var lastTranscriptEventAt: Instant?
+  public var backgroundCommandSessions: Int = 0
+  public var printRunStarts: [Instant] = []
+  public var backgroundSince: Instant?
+  public var lastCountedCaffeinate: Instant?
+  public var source: String?
+  public var limitLogged: Set<String> = []
+  public var backgroundHolding: Bool = false
+  public var printHolding: Bool = false
 
   public init(
     lastEligibleTranscript: Instant? = nil,
@@ -25,8 +33,18 @@ public struct BusyState: Sendable, Equatable {
 }
 
 public enum Busy {
+  public static let printSource = "print"
+  public static let backgroundSource = "background"
+
   public static func evaluate(_ state: inout BusyState, now: Instant, settings: Settings) -> [Decision] {
     var decisions: [Decision] = []
+    if state.claudeCaffeinate && eligibleTranscript(state, within: settings.stuckWindowSeconds, now: now) {
+      state.lastCountedCaffeinate = now
+    }
+    let limit = settings.longRunningLimitSeconds
+    state.printHolding = printHolds(state, now: now, settings: settings, limit: limit)
+    state.backgroundHolding = backgroundHolds(state, now: now, settings: settings, limit: limit)
+    decisions += limitDecisions(&state, settings: settings, limit: limit)
     let isBusy: Bool
     let source: String
     if eligibleTranscript(state, within: settings.transcriptWindowSeconds, now: now) {
@@ -37,9 +55,15 @@ public enum Busy {
       isBusy = true
       source = "caffeinate"
       state.stuckLogged = false
+    } else if state.printHolding {
+      isBusy = true
+      source = printSource
+    } else if state.backgroundHolding {
+      isBusy = true
+      source = backgroundSource
     } else {
       isBusy = false
-      source = state.claudeCaffeinate ? "caffeinate" : "transcript"
+      source = offSource(state)
       if state.claudeCaffeinate && !state.stuckLogged && !freshCaffeinate(state, now: now) {
         state.stuckLogged = true
         decisions.append(
@@ -50,7 +74,15 @@ public enum Busy {
           ))
       }
     }
-    guard state.busy != isBusy else { return decisions }
+    let previousSource = state.source
+    state.source = isBusy ? source : nil
+    guard state.busy != isBusy else {
+      if isBusy, previousSource != source, source == printSource || source == backgroundSource {
+        decisions.append(
+          Decision(keyword: .busy, verb: "continues", fields: [DecisionField(key: "source", value: source)]))
+      }
+      return decisions
+    }
     state.busy = isBusy
     decisions.append(
       Decision(
@@ -58,6 +90,70 @@ public enum Busy {
         verb: isBusy ? "on" : "off",
         fields: [DecisionField(key: "source", value: source)]
       ))
+    return decisions
+  }
+
+  static func offSource(_ state: BusyState) -> String {
+    if state.claudeCaffeinate {
+      return "caffeinate"
+    }
+    if !state.printRunStarts.isEmpty {
+      return printSource
+    }
+    if state.backgroundCommandSessions > 0 {
+      return backgroundSource
+    }
+    return "transcript"
+  }
+
+  public static func backgroundAnchor(_ state: BusyState) -> Instant? {
+    [state.lastEligibleTranscript, state.lastCountedCaffeinate, state.backgroundSince].compactMap { $0 }.max()
+  }
+
+  static func within(_ limit: Double?, from start: Instant, now: Instant) -> Bool {
+    guard let limit else { return true }
+    return now.nanoseconds(since: start) < Instant.nanoseconds(forSeconds: limit)
+  }
+
+  static func printHolds(_ state: BusyState, now: Instant, settings: Settings, limit: Double?) -> Bool {
+    guard settings.printRunsKeepAwake else { return false }
+    return state.printRunStarts.contains { within(limit, from: $0, now: now) }
+  }
+
+  static func backgroundHolds(_ state: BusyState, now: Instant, settings: Settings, limit: Double?) -> Bool {
+    guard settings.backgroundCommandsKeepAwake, state.backgroundCommandSessions > 0 else { return false }
+    guard limit != nil else { return true }
+    guard let anchor = backgroundAnchor(state) else { return false }
+    return within(limit, from: anchor, now: now)
+  }
+
+  static func limitDecisions(_ state: inout BusyState, settings: Settings, limit: Double?) -> [Decision] {
+    let stopped = [
+      (
+        printSource,
+        limit != nil && settings.printRunsKeepAwake && !state.printRunStarts.isEmpty && !state.printHolding
+      ),
+      (
+        backgroundSource,
+        limit != nil && settings.backgroundCommandsKeepAwake && state.backgroundCommandSessions > 0
+          && !state.backgroundHolding
+      ),
+    ]
+    var decisions: [Decision] = []
+    for (source, isStopped) in stopped {
+      guard isStopped else {
+        state.limitLogged.remove(source)
+        continue
+      }
+      guard state.limitLogged.insert(source).inserted else { continue }
+      decisions.append(
+        Decision(
+          keyword: .busy, verb: "limit",
+          fields: [
+            DecisionField(key: "source", value: source),
+            DecisionField(key: "minutes", value: String(settings.longRunningLimitMinutes)),
+          ]))
+    }
     return decisions
   }
 

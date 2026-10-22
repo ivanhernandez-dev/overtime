@@ -148,6 +148,14 @@ public enum Reducer {
         state.busy.caffeinateSince = nil
       }
       state.busy.claudeCaffeinate = caffeinate
+      let background = facts.agents.backgroundCommandSessions
+      if background <= 0 {
+        state.busy.backgroundSince = nil
+      } else if state.busy.backgroundSince == nil {
+        state.busy.backgroundSince = now
+      }
+      state.busy.backgroundCommandSessions = max(0, background)
+      state.busy.printRunStarts = facts.agents.printRunStarts
       state.lastLidClosed = facts.lidClosed
       state.lastExternalDisplays = facts.externalDisplays
       state.lastFullWake = facts.fullWake
@@ -268,6 +276,7 @@ public enum Reducer {
     if state.busy.claudeCaffeinate, let since = state.busy.caffeinateSince {
       candidates.append(since.adding(seconds: Timing.freshCaffeinateSeconds))
     }
+    candidates += longRunningDeadlines(state, settings)
     if let lastBusy = state.want.lastBusy {
       candidates.append(lastBusy.adding(seconds: settings.releaseGraceSeconds))
     }
@@ -288,6 +297,22 @@ public enum Reducer {
       return deadline > lastEventAt
     }
     return upcoming.min()
+  }
+
+  static func longRunningDeadlines(_ state: AppState, _ settings: Settings) -> [Instant] {
+    guard let limit = settings.longRunningLimitSeconds else { return [] }
+    var edges: [Instant] = []
+    if settings.backgroundCommandsKeepAwake, state.busy.backgroundCommandSessions > 0,
+      let anchor = Busy.backgroundAnchor(state.busy)
+    {
+      edges += windowEdges(from: anchor, seconds: limit)
+    }
+    if settings.printRunsKeepAwake {
+      for start in state.busy.printRunStarts {
+        edges += windowEdges(from: start, seconds: limit)
+      }
+    }
+    return edges
   }
 
   static func pauseDeadline(_ pause: PauseState, state: AppState) -> Instant? {

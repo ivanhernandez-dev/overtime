@@ -331,4 +331,61 @@ struct SettingsTests {
     let validation = Settings(transcriptWindowSeconds: 900, stuckWindowSeconds: 300).validated()
     #expect(validation.settings.stuckWindowSeconds == 900)
   }
+
+  @Test func theLongRunningDefaultsAreOnWithNoLimit() {
+    let settings = Settings()
+    #expect(settings.backgroundCommandsKeepAwake == true)
+    #expect(settings.printRunsKeepAwake == true)
+    #expect(settings.longRunningLimitEnabled == false)
+    #expect(settings.longRunningLimitMinutes == 120)
+    #expect(Settings.longRunningLimitRange == 15...720)
+  }
+
+  static let releasedFile = """
+    {"batteryLowPercent":10,"batteryResumePercent":20,"transcriptWindowSeconds":120,"releaseGraceSeconds":60,
+    "stuckWindowSeconds":1800,"ignoredEntrypoints":["sdk-*"],"keepDisplayOn":false,"hotspot":"",
+    "hotspotAutoDetect":false,"batteryProtectionEnabled":true,"helperBatteryFloorPercent":10,
+    "temperatureProtectionEnabled":false,"temperatureReleaseCelsius":45,"lidClosedKeepAwake":"always",
+    "pauseFirstMinutes":15,"pauseSecondMinutes":60,"keepAwakeFirstMinutes":30,"keepAwakeSecondMinutes":120}
+    """
+
+  @Test func aFileWithoutTheLongRunningKeysGetsTheDefaults() throws {
+    #expect(try decode("{}") == Settings())
+    #expect(try decode(Self.releasedFile) == Settings())
+  }
+
+  @Test func theLongRunningKeysRoundTrip() throws {
+    let settings = Settings(
+      backgroundCommandsKeepAwake: false, printRunsKeepAwake: false, longRunningLimitEnabled: true,
+      longRunningLimitMinutes: 45)
+    let data = try JSONEncoder().encode(settings)
+    let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    #expect(object["backgroundCommandsKeepAwake"] as? Bool == false)
+    #expect(object["printRunsKeepAwake"] as? Bool == false)
+    #expect(object["longRunningLimitEnabled"] as? Bool == true)
+    #expect(object["longRunningLimitMinutes"] as? Int == 45)
+    #expect(try JSONDecoder().decode(Settings.self, from: data) == settings)
+    #expect(throws: (any Error).self) { try decode(#"{"longRunningLimitMinutes":"two hours"}"#) }
+    #expect(throws: (any Error).self) { try decode(#"{"backgroundCommandsKeepAwake":"yes"}"#) }
+  }
+
+  @Test(arguments: [(1, 15), (14, 15), (15, 15), (720, 720), (721, 720), (-5, 15)])
+  func theLimitIsClampedToFifteenMinutesToTwelveHours(_ pair: (value: Int, expected: Int)) {
+    let validation = Settings(longRunningLimitMinutes: pair.value).validated()
+    #expect(validation.settings.longRunningLimitMinutes == pair.expected)
+    let recorded = validation.adjustments.filter { $0.key == "longRunningLimitMinutes" }
+    if pair.value == pair.expected {
+      #expect(recorded.isEmpty)
+    } else {
+      #expect(
+        recorded == [
+          SettingsAdjustment(key: "longRunningLimitMinutes", from: String(pair.value), to: String(pair.expected))
+        ])
+    }
+  }
+
+  @Test func anEnabledLimitIsGivenInSeconds() {
+    #expect(Settings(longRunningLimitEnabled: true, longRunningLimitMinutes: 120).longRunningLimitSeconds == 7200)
+    #expect(Settings(longRunningLimitEnabled: false, longRunningLimitMinutes: 120).longRunningLimitSeconds == nil)
+  }
 }
