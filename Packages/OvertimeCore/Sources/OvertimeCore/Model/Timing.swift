@@ -21,6 +21,8 @@ public enum Timing {
   public static let healthCheckSeconds: Double = 30
   public static let learnedRootLingerSeconds: Double = 600
   public static let sessionWorkingGraceSeconds: Double = 90
+  public static let sessionWaitingGraceSeconds: Double = 6
+  public static let backgroundCommandMinimumAgeSeconds: Double = 30
   public static let coexistenceCheckSeconds: Double = 30
   public static let hotspotJoinWaitSeconds: Double = 16
   public static let hotspotJoinLandSeconds: Double = 30

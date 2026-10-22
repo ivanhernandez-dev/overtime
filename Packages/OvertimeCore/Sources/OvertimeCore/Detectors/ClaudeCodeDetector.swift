@@ -1,11 +1,57 @@
 import Foundation
 
+public struct LongRunningWork: Sendable, Equatable {
+  public var waitingSessionPIDs: Set<Int32>
+  public var printRunStarts: [Int32: Instant]
+
+  public init(waitingSessionPIDs: Set<Int32> = [], printRunStarts: [Int32: Instant] = [:]) {
+    self.waitingSessionPIDs = waitingSessionPIDs
+    self.printRunStarts = printRunStarts
+  }
+}
+
 public struct ClaudeCodeDetector: AgentDetector {
   public let name = "claude-code"
   public let userID: UInt32
 
+  public static let toolShellNames: Set<String> = ["bash", "zsh"]
+
   public init(userID: UInt32) {
     self.userID = userID
+  }
+
+  public static func looksLikeClaude(comm: String) -> Bool {
+    if comm == "claude" {
+      return true
+    }
+    guard let first = comm.first, let last = comm.last, first.isASCIIDigit, last.isASCIIDigit else { return false }
+    return isVersionName(comm)
+  }
+
+  public func longRunningWork(in records: [ProcessRecord], now: Instant) -> LongRunningWork {
+    let own = records.filter { $0.uid == userID }
+    var byPID: [Int32: ProcessRecord] = [:]
+    for record in own {
+      byPID[record.pid] = record
+    }
+    var work = LongRunningWork()
+    for record in own where Self.isAgedToolCommand(record, now: now) {
+      guard let parent = byPID[record.ppid], parent.uid == record.uid, !parent.zombie, Self.isClaude(parent)
+      else { continue }
+      work.waitingSessionPIDs.insert(parent.pid)
+    }
+    for record in own where record.printMode && !record.zombie && Self.isClaude(record) {
+      guard let start = record.startMono else { continue }
+      work.printRunStarts[record.pid] = start
+    }
+    return work
+  }
+
+  static func isAgedToolCommand(_ record: ProcessRecord, now: Instant) -> Bool {
+    guard toolShellNames.contains(record.comm), !record.hasControllingTerminal, record.processGroup == record.pid,
+      !record.zombie, record.claudeToolCommand, record.ppid > 1, let start = record.startMono, start <= now
+    else { return false }
+    return now.seconds(since: start) >= Timing.backgroundCommandMinimumAgeSeconds
   }
 
   public static func isClaude(_ record: ProcessRecord) -> Bool {
@@ -54,7 +100,8 @@ public struct ClaudeCodeDetector: AgentDetector {
       sessionParents.insert(parent.pid)
     }
     let terminalAgentStarts = own.compactMap { record in
-      record.hasControllingTerminal && ClaudeCodeDetector.isClaude(record) ? record.startMono : nil
+      record.hasControllingTerminal && !record.printMode && ClaudeCodeDetector.isClaude(record)
+        ? record.startMono : nil
     }
     let claudeConfigDirectories = Set(
       own.compactMap { record in
@@ -82,8 +129,11 @@ public struct ClaudeCodeDetector: AgentDetector {
     guard components[components.count - 3] == "claude", components[components.count - 2] == "versions" else {
       return false
     }
-    return version.contains(".") && version.contains(where: \.isASCIIDigit)
-      && version.allSatisfy { $0 == "." || $0.isASCIIDigit }
+    return isVersionName(version)
+  }
+
+  static func isVersionName<S: StringProtocol>(_ name: S) -> Bool {
+    name.contains(".") && name.contains(where: \.isASCIIDigit) && name.allSatisfy { $0 == "." || $0.isASCIIDigit }
   }
 }
 

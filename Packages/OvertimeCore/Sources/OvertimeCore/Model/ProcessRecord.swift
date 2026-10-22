@@ -14,6 +14,10 @@ public struct ProcessRecord: Sendable, Equatable {
   public var execPath: String?
   public var pidPath: String?
   public var claudeConfigDirectory: String?
+  public var processGroup: Int32?
+  public var zombie: Bool
+  public var printMode: Bool
+  public var claudeToolCommand: Bool
 
   public init(
     pid: Int32,
@@ -26,7 +30,11 @@ public struct ProcessRecord: Sendable, Equatable {
     argv1: String? = nil,
     execPath: String? = nil,
     pidPath: String? = nil,
-    claudeConfigDirectory: String? = nil
+    claudeConfigDirectory: String? = nil,
+    processGroup: Int32? = nil,
+    zombie: Bool = false,
+    printMode: Bool = false,
+    claudeToolCommand: Bool = false
   ) {
     self.pid = pid
     self.ppid = ppid
@@ -39,6 +47,10 @@ public struct ProcessRecord: Sendable, Equatable {
     self.execPath = execPath
     self.pidPath = pidPath
     self.claudeConfigDirectory = claudeConfigDirectory
+    self.processGroup = processGroup
+    self.zombie = zombie
+    self.printMode = printMode
+    self.claudeToolCommand = claudeToolCommand
   }
 
   public var hasControllingTerminal: Bool {

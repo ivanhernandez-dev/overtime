@@ -104,7 +104,7 @@ struct CadenceTableGateTests {
     "sentinelTimeoutSeconds", "sentinelRespawnRetryBaseSeconds", "sentinelRespawnRetryCapSeconds",
     "systemCallTimeoutSeconds", "releaseRetrySeconds", "releaseFailuresBeforeEscalation",
     "lateWriteQuarantineSeconds", "lateWriteClearSeconds", "logRotateBytes", "learnedRootLingerSeconds",
-    "sessionWorkingGraceSeconds",
+    "sessionWorkingGraceSeconds", "sessionWaitingGraceSeconds", "backgroundCommandMinimumAgeSeconds",
   ]
 
   static let compiledRows: [String: Double] = [
@@ -341,10 +341,10 @@ struct CadenceTableGateTests {
 
   @Test func everyTimingConstantIsClassified() throws {
     let names = Self.timingNames(try PublicFaceGateTests.read(Self.timing))
-    #expect(names.count == 32)
+    #expect(names.count == 34)
     #expect(Set(names).count == names.count)
     #expect(Self.periodic.count == 8)
-    #expect(Self.notPeriodic.count == 24)
+    #expect(Self.notPeriodic.count == 26)
     #expect(Set(Self.periodic.keys).isDisjoint(with: Self.notPeriodic))
     #expect(Set(names) == Set(Self.periodic.keys).union(Self.notPeriodic))
   }
