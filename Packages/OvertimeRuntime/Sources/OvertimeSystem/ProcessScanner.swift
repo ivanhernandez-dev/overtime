@@ -12,6 +12,8 @@ public struct ProcessScanner: Sendable {
     var ttyDevice: UInt32
     var startSeconds: UInt64
     var startMicroseconds: UInt64
+    var pgid: Int32
+    var status: UInt32
   }
 
   private struct Identity: Hashable, Sendable {
@@ -23,6 +25,7 @@ public struct ProcessScanner: Sendable {
 
   private struct Details: Sendable {
     var args: ProcArgs?
+    var flags: ProcArgsFlags
     var pidPath: String?
   }
 
@@ -32,6 +35,7 @@ public struct ProcessScanner: Sendable {
 
   private static let pathBufferSize = 4 * 1024
   static let amphetamineComm = "Amphetamine"
+  static let zombieStatus = UInt32(SZOMB)
 
   private let userID: UInt32
   private let cache = DetailsCache()
@@ -69,6 +73,11 @@ public struct ProcessScanner: Sendable {
       }
       if entry.ttyDevice != ProcessRecord.noDevice {
         candidates.insert(entry.pid)
+      } else if ClaudeCodeDetector.looksLikeClaude(comm: entry.comm) {
+        candidates.insert(entry.pid)
+      } else if ProcessScanner.isAgedToolShellShape(entry, wallNow: wallNow) {
+        candidates.insert(entry.pid)
+        candidates.insert(entry.ppid)
       }
     }
     var seen: Set<Identity> = []
@@ -85,7 +94,9 @@ public struct ProcessScanner: Sendable {
         uid: entry.uid,
         comm: entry.comm,
         ttyDevice: entry.ttyDevice,
-        startMono: monoNow.adding(seconds: -max(0, wallNow - startWall))
+        startMono: monoNow.adding(seconds: -max(0, wallNow - startWall)),
+        processGroup: entry.pgid,
+        zombie: entry.status == ProcessScanner.zombieStatus
       )
       if candidates.contains(pid) {
         seen.insert(identity)
@@ -95,6 +106,8 @@ public struct ProcessScanner: Sendable {
         record.execPath = details.args?.execPath
         record.pidPath = details.pidPath
         record.claudeConfigDirectory = details.args?.claudeConfigDirectory
+        record.printMode = details.flags.printMode
+        record.claudeToolCommand = details.flags.claudeToolCommand
       }
       records.append(record)
     }
@@ -109,12 +122,22 @@ public struct ProcessScanner: Sendable {
     if let cached = cache.entries.withLock({ $0[identity] }) {
       return cached
     }
+    let buffer = readArgs(identity.pid)
     let fresh = Details(
-      args: readArgs(identity.pid).flatMap(ProcArgsParser.parse),
+      args: buffer.flatMap(ProcArgsParser.parse),
+      flags: buffer.map(ProcArgsParser.flags) ?? .none,
       pidPath: readPath(identity.pid)
     )
     cache.entries.withLock { $0[identity] = fresh }
     return fresh
+  }
+
+  static func isAgedToolShellShape(_ entry: Entry, wallNow: Double) -> Bool {
+    guard ClaudeCodeDetector.toolShellNames.contains(entry.comm), entry.ttyDevice == ProcessRecord.noDevice,
+      entry.pgid == entry.pid, entry.status != zombieStatus, entry.ppid > 1
+    else { return false }
+    let startWall = Double(entry.startSeconds) + Double(entry.startMicroseconds) / 1_000_000
+    return wallNow - startWall >= Timing.backgroundCommandMinimumAgeSeconds
   }
 
   static func liveEntries() -> [Entry] {
@@ -127,7 +150,9 @@ public struct ProcessScanner: Sendable {
         comm: ProcessScanner.comm(info),
         ttyDevice: info.e_tdev,
         startSeconds: info.pbi_start_tvsec,
-        startMicroseconds: info.pbi_start_tvusec
+        startMicroseconds: info.pbi_start_tvusec,
+        pgid: Int32(bitPattern: info.pbi_pgid),
+        status: info.pbi_status
       )
     }
   }
