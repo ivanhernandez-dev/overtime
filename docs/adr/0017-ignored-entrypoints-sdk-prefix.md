@@ -46,3 +46,9 @@ A survey of all 162 transcripts under the default transcript root, subagents inc
 Every file had an entrypoint. No `sdk-ts` and no desktop-app entrypoint appeared.
 
 Local reference (not needed to read this ADR): `.claude/skills/spike-findings-overtime/references/coexistence-detection.md`.
+
+## Amendment (2026-10-22)
+
+- The transcript rule is unchanged: a transcript whose entrypoint matches the list, `sdk-*` by default, still does not count as Claude working.
+- A live `claude -p` process now keeps the Mac awake by itself for as long as it lives (**DET-14**, [0027](0027-background-commands-and-claude-p-runs-keep-the-mac-awake.md)), on by default under Long-running work in Settings > Detection. This amends the decision above rather than reversing it: a process's lifetime is exact, while a transcript window lingers after the work and cannot tell a finished run from a running one.
+- Agent SDK scripts launch Claude Code without `-p`, with the stream-json flags that long-lived editor and desktop hosts also use, so they are still not counted. Such a script can turn on Keep Awake with an `overtime://` link ([0026](0026-keep-awake-automation-url-scheme.md)).

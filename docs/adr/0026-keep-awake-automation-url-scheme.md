@@ -40,3 +40,8 @@ The app already has an external surface: the engine's control socket, which `ove
 
 - No run of the built app: this change was written on a machine without Xcode. The package code and its tests were compiled and run there with `swiftc`, and the app target was type-checked with its Swift 6 and `MainActor` default isolation settings, but the URL registration, the Apple event handler and `open -g` from launchd need a run on a Mac with the release build.
 - Since then (2026-10-22): the full CI gate passed with Xcode (core, runtime, app tests, script tests, strict lint, helper pin), and a signed release build checked the URL registration and the Apple event handler while running and at launch. Only `open -g` from a launchd job is still unverified.
+
+## Notes (2026-10-22)
+
+- A `claude -p` run now keeps the Mac awake while it runs, whatever started it, launchd included (**DET-14**, [0027](0027-background-commands-and-claude-p-runs-keep-the-mac-awake.md)), so the Context above no longer holds for the runs themselves.
+- The links remain for the gaps between scheduled runs, where Overtime still lets go, and for work Overtime does not see, such as Agent SDK scripts, which launch Claude Code without `-p`.

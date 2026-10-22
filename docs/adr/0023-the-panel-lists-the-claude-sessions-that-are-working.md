@@ -46,3 +46,13 @@ On the author's Mac, 11 Claude Code processes were open, 10 of them in a termina
 - **The test suites:** `SessionActivityTests` (the episode, the grace, a respawn gap, a long gap, a reused pid, a session that leaves, the detector rule and the measured process shape), `SessionReaderTests` (the episode start in the summaries, start-time jitter, a reused pid), `PanelContentTests` (working rows, the busy gate, titles and their collisions, the caption and the spoken text, the quiet line, the three placeholders, the header, and the path from process records to a row and the reason count), `StatusPresentationTests` (the reason counts only working sessions), `EngineSnapshotTests` (a working session is published once across busy ticks) and the hosted `PanelModelTests` (the snapshot's working sessions become rows).
 
 **Not verified:** none of this was observed on a running signed build when it was written. How the section looks and reads, with VoiceOver too, how the list follows sessions that really start and finish work, and the energy with several sessions are human checks.
+
+## Implementation notes (2026-10-22)
+
+- The list also shows `claude -p` runs ("Working · claude -p · " and the time since the run started) and sessions waiting on a command Claude started ("Waiting · background command · " for a terminal session, "Running a command · " for a session outside a terminal), terminal-less ones included ([0027](0027-background-commands-and-claude-p-runs-keep-the-mac-awake.md)).
+- One row per Claude Code process. A session that is working by the rule above shows as working; otherwise a `claude -p` run shows as one; otherwise a waiting session shows as waiting or running a command.
+- The busy gate still applies to every row, and beside it a waiting row is listed only while background commands keep the Mac awake and a `claude -p` row only while `claude -p` runs do, so the list never shows work that no longer holds.
+- The quiet idle line counts terminal sessions only; a session outside a terminal is listed only while it is active.
+- The reason line counts waiting rows apart ("Claude is waiting on a background command.", "Claude is working in 2 sessions and waiting in 1 more."); a "Running a command" row counts as working. Without a waiting row the reason line is unchanged.
+- The diagnostics export gains three booleans per session, `waiting`, `printRun` and `terminal`, and still holds no command line.
+- The durations stay edge-only: a waiting row runs from the first tick that saw it waiting, kept through a 6 s grace, and a `claude -p` row from the run's start, frozen at the first sample.

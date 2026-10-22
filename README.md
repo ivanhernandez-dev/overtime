@@ -30,7 +30,7 @@ Claude Code keeps working when you step away, but your Mac doesn't know that: it
 - **Lid open:** no idle sleep while Claude works. The display still sleeps as usual, unless you turn on "Keep display on while Claude works" in Settings > General.
 - **Lid closed:** closing the lid doesn't put the Mac to sleep. With no external display, the display turns off so the screen locks. You can limit that to when the Mac is on its power adapter, or turn it off, in Settings > General.
 - **Finds Claude Code on its own:** from its running sessions and the transcripts they write. There are no hooks and nothing to change in Claude Code, and several sessions and subagents at once are fine.
-- **Lets go when the work stops:** the Mac sleeps about three minutes after Claude's last activity. You can change the timing.
+- **Lets go when the work stops:** the Mac sleeps about three minutes after Claude's last activity. You can change the timing. A command Claude started in the background, such as a build or a test run, and a `claude -p` run count as work until they end; see Long-running work in Settings > Detection.
 - **Never stuck awake:** quitting Overtime restores normal sleep. If it crashes, hangs or is killed, a small watchdog restores it.
 - **Respects you and the battery:** Apple menu > Sleep works as usual with the lid open, and Sleep Now and Pause in the panel always let the Mac sleep. On battery, Overtime lets go at 10%. You can change that limit or turn it off in Settings > Battery, and turn on temperature protection there to also let go when the battery gets hot.
 - **Stays online with the lid closed (optional):** if the network drops, it can switch the Mac to your iPhone hotspot.
@@ -106,7 +106,7 @@ The first time Overtime opens, a short guide sets it up in seven steps: Welcome 
 
 ## Using Overtime
 
-Click the Overtime icon in the menu bar to open the panel. At the top, a status card shows what Overtime is doing and why, and how long it has kept the Mac awake. Chips below it show the lid, battery and network state. The Claude Sessions list shows each terminal session that is working, titled by its folder and captioned "Working · " with the time it has worked, plus one quiet line for the sessions that are open but idle. Under the list are the controls.
+Click the Overtime icon in the menu bar to open the panel. At the top, a status card shows what Overtime is doing and why, and how long it has kept the Mac awake. Chips below it show the lid, battery and network state. The Claude Sessions list shows each Claude session that is working, titled by its folder and captioned "Working · " with the time it has worked, each `claude -p` run ("Working · claude -p · "), and each session waiting on a command Claude started in the background ("Waiting · background command · ", or "Running a command · " for a session outside a terminal), plus one quiet line for the terminal sessions that are open but idle. Under the list are the controls.
 
 | Control | Shortcut | What it does |
 |---|---|---|
@@ -126,7 +126,7 @@ The menu bar icon has eight states, each with its own shape, not only its own co
 Settings has seven panes, in this order:
 
 - **General:** Launch at login, keeping the Mac awake with the lid closed, the display, the Pause and Keep Awake durations, and notifications.
-- **Detection:** How Overtime tells that Claude is working.
+- **Detection:** How Overtime tells that Claude is working, and whether background commands and `claude -p` runs keep the Mac awake.
 - **Battery:** When Overtime lets the Mac sleep to protect the battery, by charge and by temperature, and the Unplug Protection floor.
 - **Network:** Switching to your iPhone hotspot when the network fails.
 - **Unplug Protection:** Keeps the lid-closed Mac awake when you unplug power or a display.
@@ -155,7 +155,7 @@ open -g "overtime://stop-keep-awake"
 
 As in the panel, turning Keep Awake on ends a pause, and a new keep-awake link replaces the one that is on. If Overtime isn't running, the link opens it, and the command runs once Overtime is ready. A link with a mistake, such as `minutes=0` or an unknown parameter, changes nothing. The decision log, `~/Library/Logs/Overtime/overtimed.log`, has a `url` line for each link, with the reason when it was ignored.
 
-This is how to keep the Mac awake for scheduled `claude -p` runs, which Overtime ignores by default (see Ignored entrypoints in Settings > Detection). A launch agent can turn Keep Awake on every evening before the first run, for example at 20:55 until 05:30. Save this as `~/Library/LaunchAgents/com.example.overtime-overnight.plist`:
+A `claude -p` run keeps the Mac awake while it runs (Long-running work in Settings > Detection), but between two scheduled runs Overtime lets go and the Mac can sleep before the next one. A launch agent keeps it awake across those gaps: it can turn Keep Awake on every evening before the first run, for example at 20:55 until 05:30. Save this as `~/Library/LaunchAgents/com.example.overtime-overnight.plist`:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -187,7 +187,7 @@ Any app on your Mac can open these links, and so can a web page once your browse
 
 ## How it works
 
-- **Detect.** Claude Code counts as working while a Claude session in a terminal keeps its own `caffeinate` running, or while a transcript under `~/.claude/projects` (subagents included) was written in the last 2 minutes. A Claude Code session that sets its own CLAUDE_CONFIG_DIR is watched automatically while it runs, and you can add folders in Settings > Detection. Transcripts whose entrypoint is on the ignored list (by default `sdk-*`, which covers `claude -p` and Agent SDK automations) don't count, and neither do background tasks or `/loop` wake-ups. There are no hooks and no AI: only system state.
+- **Detect.** Claude Code counts as working while a Claude session in a terminal keeps its own `caffeinate` running, while a transcript under `~/.claude/projects` (subagents included) was written in the last 2 minutes, while a command Claude started, in the foreground or in the background, has been running for 30 seconds or more, and while a `claude -p` run is alive. A Claude Code session that sets its own CLAUDE_CONFIG_DIR is watched automatically while it runs, and you can add folders in Settings > Detection. Transcripts whose entrypoint is on the ignored list (by default `sdk-*`, which covers `claude -p` and Agent SDK automations) don't count, and neither do `/loop` wake-ups. Agent SDK scripts launch Claude Code without `-p`, the way editors and the desktop app run their long-lived sessions, so they don't count either. There are no hooks and no AI: only system state.
 - **Hold.** With the lid open, Overtime holds a standard macOS power assertion against idle sleep and renews it while Claude works. macOS drops it within five minutes if Overtime stops renewing it, and at once when Overtime exits. With the lid closed, it uses a public macOS power-management call that tells the Mac not to sleep on lid close, without administrator rights, and sets it again when macOS resets it. "Keep awake with the lid closed" in Settings > General chooses when it does this: Always, the default; Only on power adapter, where unplugging the charger with the lid closed lets the Mac sleep; or Never, where closing the lid always lets the Mac sleep and only the lid-open hold remains.
 - **Watch.** A small watchdog process runs next to the app. If Overtime crashes, hangs or is killed, the watchdog restores normal sleep first and then reopens Overtime, at most 3 times in 10 minutes. A hold left behind is cleared the next time Overtime starts, and restarting the Mac clears the lid-close setting.
 - **Release.** The Mac sleeps about three minutes after Claude's last activity: the 2-minute Transcript window plus the 1-minute Release grace, both in Settings > Detection. With the lid closed and no external display, Overtime checks about 30 seconds after letting go that the Mac went to sleep, and asks for sleep if it didn't.
@@ -230,7 +230,7 @@ Overtime collects no telemetry.
 
 **What it reads, on your Mac only:**
 
-- the list of your own running processes, to spot Claude Code sessions;
+- the list of your own running processes, to spot Claude Code sessions, the commands they run and `claude -p` runs; a command's text is only checked for the markers Claude Code adds to it, and is never kept, logged or exported;
 - when the transcripts in its folders were last written, and the first 64 KB of each transcript, only to read which kind of client wrote it;
 - the power state: lid, battery charge and temperature, charger, displays and idle time;
 - for network failover only: the Wi-Fi interface, the router address and your known networks, and, with Location allowed, a scan for nearby networks with your hotspot's name.
@@ -283,9 +283,16 @@ Without Unplug Protection, a closed Mac can sleep when you plug the charger back
 </details>
 
 <details>
+<summary>The Mac stays awake after Claude finished</summary>
+
+A command Claude started in the background, such as a dev server or a file watcher, keeps the Mac awake for as long as it runs and its Claude session is open, because Claude may still be waiting for it. A `claude -p` run keeps it awake until the run exits. The panel names them: "Waiting · background command" (or "Running a command" for a session outside a terminal) and "Working · claude -p". To let the Mac sleep, stop the command, turn off its switch under Long-running work in Settings > Detection, or set a time limit there. The decision log has a `BUSY continues source=background` line when Claude's turn ends and a command keeps the Mac awake.
+
+</details>
+
+<details>
 <summary>Overtime doesn't notice Claude Code</summary>
 
-Open Settings > Diagnostics: Detection health lists transcript folders that are missing or can't be read. Settings > Detection marks such a folder with a warning sign, and you can add folders there. Overtime always watches `~/.claude/projects`, and a Claude Code session that sets its own CLAUDE_CONFIG_DIR is watched while it runs. `claude -p` and Agent SDK scripts are ignored on purpose; you can change that under Ignored entrypoints in Settings > Detection. To keep the Mac awake while they run, turn on Keep Awake from the script: see [Automation](#automation).
+Open Settings > Diagnostics: Detection health lists transcript folders that are missing or can't be read. Settings > Detection marks such a folder with a warning sign, and you can add folders there. Overtime always watches `~/.claude/projects`, and a Claude Code session that sets its own CLAUDE_CONFIG_DIR is watched while it runs. The transcripts of `claude -p` and Agent SDK scripts are ignored on purpose; you can change that under Ignored entrypoints in Settings > Detection. A `claude -p` run still keeps the Mac awake while it runs. Agent SDK scripts don't count, so they can turn on Keep Awake themselves: see [Automation](#automation).
 
 </details>
 
@@ -311,16 +318,16 @@ Not by default. Turn on Keep display on in the menu bar panel, or "Keep display 
 </details>
 
 <details>
-<summary>Why doesn't a dev server or /loop keep the Mac awake?</summary>
+<summary>Does a dev server or /loop keep the Mac awake?</summary>
 
-Only foreground Claude work counts, by design: background tasks and `/loop` wake-ups don't. Use Keep Awake for anything else.
+A command Claude started keeps the Mac awake for as long as it runs and its Claude session is open, dev servers included, because Claude may be waiting for it. With no time limit, which is the default, a dev server Claude started in the background keeps the Mac awake until you stop it or close its session. To avoid that, stop the server when you are done, turn off "Keep awake while Claude waits on a background command" in Settings > Detection, or turn on "Stop after a time limit" there (2 hours when you first turn it on). `/loop` wake-ups don't keep the Mac awake between runs; use Keep Awake for that.
 
 </details>
 
 <details>
 <summary>Is it safe to run with the lid closed in a bag?</summary>
 
-Overtime lets go about three minutes after Claude stops and at the battery limit, and if Overtime fails, its watchdog restores normal sleep. With temperature protection on, it also lets go when the battery reaches its temperature limit, and with Unplug Protection on, the helper lets go when the Mac or its battery gets too hot. Ventilation is still your call.
+Overtime lets go about three minutes after Claude stops and at the battery limit, and if Overtime fails, its watchdog restores normal sleep. With temperature protection on, it also lets go when the battery reaches its temperature limit, and with Unplug Protection on, the helper lets go when the Mac or its battery gets too hot. A command Claude started in the background, or a `claude -p` run, counts as Claude working until it ends, so check the panel before you close the lid, or set a time limit in Settings > Detection. Ventilation is still your call.
 
 </details>
 

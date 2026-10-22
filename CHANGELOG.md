@@ -2,6 +2,14 @@
 
 All notable changes to Overtime are listed here, in the Keep a Changelog format, and versions follow Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+
+- Overtime keeps the Mac awake while Claude waits on a command it started in the background, such as a build, a test run or a script, until the command ends. A dev server Claude started keeps the Mac awake too, for as long as it runs: stop it, or turn this off or set a time limit in Settings > Detection.
+- A running `claude -p` keeps the Mac awake until it exits, whether a terminal, a script or a scheduled job started it. Agent SDK scripts are not counted.
+- The panel lists those sessions as Waiting · background command and Working · claude -p.
+
 ## [1.1.0] - 2026-10-22
 
 ### Added
